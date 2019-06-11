@@ -3,31 +3,40 @@
  * line = response.feed.entry[n] */
 var Entry=function(line){
   var col = line.content.$t.split(",");
-  this.name  = col[0].split(": ")[1];
-  this.year  = col[1].split(": ")[1];
-  this.order = col[2].split(": ")[1];
-}
-Entry.prototype.toString = function(){
-  return this.year + ":" + this.name + "(" + this.order + ")";
-}
-/* Maps Object
- * Maps of the large nubmers.
- * list = list of large nubmers */
-var Maps=function(list){
-  this.entrylist = list; /* list of large numbrers */
-
-  /* entrylist -> sort */
-  this.yearsort  = []; /* list of index sorted by year */
-  this.largesort = []; /* list of index sorted by size */
-  entries = this.entrylist.length;
-  for(var e=0;e<entries;e++){
-
+  for (var i=0;i<col.length;i++){
+    if (col[i].indexOf(": ")==-1){
+      col[i-1]+=","+col[i];
+      col.splice(i,1);
+      i--;
+    }
+  }
+  var attributes="order,year,name,lname,author,lauthor,locale,expression".split(",");
+  for (var i=0;i<attributes.length;i++){
+    this[attributes[i]]  = col[i]?col[i].split(": ")[1]:"";
   }
 }
+Entry.prototype.toString = function(){
+  return this.year + ":" + this.name + "(" + this.order + ") $$" + this.expression + "$$";
+}
 
-/* entry point */
-var main=function(){
-  /* sheet via ajax */
+var data=[];
+var expand=function(res){
+  var sheet = res.feed.entry;
+  var entries = sheet.length;
+  for(var e=0;e<entries;e++){
+    var entry = new Entry(sheet[e]);
+    data.push(entry);
+  }
+
+  var str="";
+  for(var e=0;e<entries;e++){
+    str = str + data[e].toString();
+    str = str + "\n";
+  }
+  document.getElementById("debug").innerHTML = str;
+}
+
+var entry=function(){
   var spreadsheetId = "11WH6PrhFAcdMEWSTjxSjZ7_rWHg-b8shAvSFn99bdyQ",
     url = "https://spreadsheets.google.com/feeds/list/" +
           spreadsheetId +
@@ -35,32 +44,29 @@ var main=function(){
   $.get({
     url: url,
     success: function(response) {
-      main2(response); /* set callback and continue to main2 */
+      expand(response);
     }
   });
 };
 
-/* continued from main(). */
-var main2=function(res){
-
-  /* res -> parse -> entrylist[n] */
-  var sheet = res.feed.entry;
-  var entries = sheet.length;
-  entrylist = [];
-  for(var e=0;e<entries;e++){
-    var entry = new Entry(sheet[e]);
-    entrylist.push(entry);
-  }
-  /* sort and make position */ 
-  largesort = [];
-  yearsort = [];
-  /* for debug */
-  var str="";
-  for(var e=0;e<entries;e++){
-    str = str + entrylist[e].toString();
-    str = str + "\n";
-  }
-  document.getElementById("debug").innerHTML = str;
+window.onload=function (){
+  entry();
+  waitUntilEntry=setInterval(function(){
+    if (data.length){
+      clearInterval(waitUntilEntry);
+    }else{
+      return;
+    }
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle="white";
+    ctx.fillRect(0,0,640,480);
+    ctx.fillStyle="black";
+    ctx.font="12px Courier";
+    console.log(data);
+    for (var i=0;i<data.length;i++){
+      var datum=data[i];
+      ctx.fillText(datum.name+"("+datum.year+")",10+10*datum.order,30+14*i);
+    }
+  },100);
 }
-
-
