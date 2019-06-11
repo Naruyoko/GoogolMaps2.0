@@ -1,6 +1,3 @@
-/* Entry object 
- * Entry is the object of each large number. 
- * line = response.feed.entry[n] */
 var Entry=function(line){
   var col = line.content.$t.split(",");
   for (var i=0;i<col.length;i++){
@@ -10,6 +7,7 @@ var Entry=function(line){
       i--;
     }
   }
+  console.log(col)
   var attributes="order,year,name,lname,author,lauthor,locale,expression".split(",");
   for (var i=0;i<attributes.length;i++){
     this[attributes[i]]  = col[i]?col[i].split(": ")[1]:"";
@@ -59,14 +57,31 @@ window.onload=function (){
     }
     var canvas = document.getElementById('canvas');
     var ctx = canvas.getContext('2d');
+    canvas.width=960;
+    canvas.height=640;
     ctx.fillStyle="white";
-    ctx.fillRect(0,0,640,480);
-    ctx.fillStyle="black";
-    ctx.font="12px Courier";
+    ctx.fillRect(0,0,960,640);
     console.log(data);
     for (var i=0;i<data.length;i++){
       var datum=data[i];
-      ctx.fillText(datum.name+"("+datum.year+")",10+10*datum.order,30+14*i);
+      var basex=10+50*datum.order;
+      var year=datum.year;
+      if (year>9999){
+        year=(""+year).substring(0,4)*1;
+      }
+      var basey=Math.pow(year-1900,2)/100*3+20;
+      var label=datum.name+"("+year+")";
+      ctx.fillStyle="black";
+      ctx.font="12px Courier";
+      ctx.fillText(label,basex,basey);
+      var img=new Image;
+      img.src="https://latex.codecogs.com/gif.latex?"+encodeURIComponent(datum.expression);
+      ctx.scale(0.8,0.8);
+      ctx.drawImage(img,(basex+ctx.measureText(label).width)*1.25,(basey-14)*1.25);
+      ctx.scale(1.25,1.25);
+      ctx.fillStyle="gray";
+      ctx.font="9px Courier";
+      ctx.fillText(datum.author,basex,basey+10);
     }
   },100);
 }
