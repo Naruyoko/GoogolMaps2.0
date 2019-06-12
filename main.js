@@ -28,7 +28,10 @@ Entry.prototype.pyear = function (){
   }
   return this.year*1;
 }
-Entry.prototype.drawPos=function (){
+Entry.prototype.getsub = function (){
+  return this.author+", "+this.year;
+}
+Entry.prototype.drawPos = function (){
   var x,y;
   x=10+740*this.order/(data[data.length-1].order);
   if (this.pyear()<1980){
@@ -40,6 +43,15 @@ Entry.prototype.drawPos=function (){
     x:x,
     y:y
   };
+}
+Entry.prototype.totalWidth = function (context){
+  var o=context.font;
+  context.font="12px Courier";
+  var c=context.measureText(this.name).width+this.image.naturalWidth*0.8+4;
+  context.font="9px Courier";
+  c=Math.max(c,context.measureText(this.getsub()).width);
+  context.font=o;
+  return c;
 }
 
 var data=[];
@@ -115,7 +127,7 @@ function draw(){
     //draw
     ctx.beginPath();
     ctx.strokeStyle=datum.color;
-    ctx.rect(pos.x-2,pos.y-12,ctx.measureText(datum.name).width+datum.image.naturalWidth*0.8+10,24);
+    ctx.rect(pos.x-2,pos.y-12,datum.totalWidth(ctx)+6,24);
     ctx.stroke();
   }
   //draw entry
@@ -135,7 +147,7 @@ function draw(){
     //draw author and year
     ctx.fillStyle="gray";
     ctx.font="9px Courier";
-    ctx.fillText(datum.author+", "+datum.year,pos.x,pos.y+10);
+    ctx.fillText(datum.getsub(),pos.x,pos.y+10);
     //evolved from/related handle
     for (var j=0;j<data.length;j++){
       //get other
@@ -148,7 +160,7 @@ function draw(){
       if (datum.evolvedfrom.includes(root.name)||datum.evolvedfrom.includes(root.lname)){
         ctx.beginPath();
         ctx.strokeStyle=datum.color;
-        canvas_arrow(ctx,root.drawPos().x+ctx.measureText(root.name).width+root.image.naturalWidth*0.8+8,root.drawPos().y,pos.x,pos.y);
+        canvas_arrow(ctx,root.drawPos().x+root.totalWidth(ctx)+4,root.drawPos().y,pos.x-2,pos.y);
         ctx.stroke();
         ctx.strokeStyle="black";
       }
@@ -157,7 +169,7 @@ function draw(){
         ctx.setLineDash([5,5]);
         ctx.beginPath();
         ctx.strokeStyle=datum.color;
-        canvas_arrow(ctx,root.drawPos().x+ctx.measureText(root.name).width+root.image.naturalWidth*0.8+8,root.drawPos().y,pos.x,pos.y);
+        canvas_arrow(ctx,root.drawPos().x+root.totalWidth(ctx)+4,root.drawPos().y,pos.x-2,pos.y);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.strokeStyle="black";
