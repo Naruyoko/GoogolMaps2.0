@@ -2,8 +2,29 @@
   <head><title>sheet2js</title>
 </head>
 <body>
-<textarea id="debug" cols=50 rows=10></textarea><br>
-<canvas id="canvas" style="width:960px;height:640px"></canvas>
+<textarea id="debug" cols=50 rows=10></textarea>
+<p>
+  <input type="range" min=100 max=4000 value=960 step=25 id="x" onchange="resize()">
+  <input type="range" min=100 max=4000 value=640 step=25 id="y" onchange="resize()">
+  <button onclick="resetscrsize();resize();">Reset Screen Size</button>
+  <br>
+  <input type="range" min=0 max=10 value=1 step=0.01 id="dx" onchange="resize()">
+  <input type="range" min=0 max=10 value=1 step=0.01 id="dy" onchange="resize()">
+  <button onclick="resetscrzoom();resize();">Reset Screen Zoom</button>
+  <br>
+  <input type="range" min=-480 max=1440 value=480 step=1 id="+x" onchange="resize()">
+  <input type="range" min=-320 max=960 value=320 step=1 id="+y" onchange="resize()">
+  <button onclick="resetscrpos();resize();">Reset Screen Position</button>
+  <br>
+  <input type="checkbox" id="center" onclick="resize()">
+  <input type="checkbox" id="physics">
+  <button onclick="resetphysics();resize();">Reset Physics</button>
+  <button onclick="resetall();resize();">Reset All</button>
+  <br>
+  <input type="text" id="followid">
+  <input type="checkbox" id="follow">
+</p>
+<canvas id="canvas" style="width:960px;height:640px;border:1px solid black"></canvas>
 <script type="text/javascript" src="https://code.jquery.com/jquery-1.12.0.min.js">
 //--</script>
 <script type="text/javascript" src="./main.js"></script>
