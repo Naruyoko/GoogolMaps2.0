@@ -1,3 +1,7 @@
+function dg(s){
+  return document.getElementById(s);
+}
+
 var Entry=function(line){
   var col = line.content.$t.split(",");
   for (var i=0;i<col.length;i++){
@@ -18,6 +22,7 @@ var Entry=function(line){
   var img=new Image();
   img.src="https://latex.codecogs.com/gif.latex?"+encodeURIComponent(this.expression);
   this.image=img;
+  this.x=this.y=this.vx=this.vy=-1;
 }
 Entry.prototype.toString = function(){
   return this.year + ":" + this.name + "(" + this.order + ") $$" + this.expression + "$$ w/" + this.color;
@@ -32,16 +37,9 @@ Entry.prototype.getsub = function (){
   return this.author+", "+this.year;
 }
 Entry.prototype.drawPos = function (){
-  var x,y;
-  x=10+740*this.order/(data[data.length-1].order);
-  if (this.pyear()<1980){
-    y=Math.pow(this.pyear()-1900,2)*0.01+20;
-  }else{
-    y=Math.pow(this.pyear()-1980,2)*0.34+84;
-  }
   return {
-    x:x,
-    y:y
+    x:canvas.width/2+(this.x-dg("+x").value)*dg("dx").value,
+    y:canvas.height/2+(this.y-dg("+y").value)*dg("dy").value
   };
 }
 Entry.prototype.totalWidth = function (context){
@@ -94,6 +92,8 @@ function canvas_arrow(context, fromx, fromy, tox, toy){
     context.lineTo(tox-headlen*Math.cos(angle+Math.PI/6),toy-headlen*Math.sin(angle+Math.PI/6));
 }
 
+var canvas,ctx
+
 window.onload=function (){
   console.clear();
   entry();
@@ -103,19 +103,166 @@ window.onload=function (){
     }else{
       return;
     }
-    draw()
-    setTimeout(draw,5000);
+    //configure canvas
+    canvas = dg('canvas');
+    ctx = canvas.getContext('2d');
+    canvas.width=960;
+    canvas.height=640;
+    canvas.style.margin="4px";
+    resetphysics();
+    draw();
+    setInterval(function(){if(dg("physics").checked){draw();}},1000/60);
   },100);
+}
+function intersect(b1,b2){
+  return Math.abs((b1.x+b1.w/2)-(b2.x+b2.w/2))<(b1.w+b2.w)/2||Math.abs((b1.y+b1.h/2)-(b2.y+b2.h/2))<(b1.h+b2.h)/2;
+}
+
+var physicsspeed=1;
+
+function abspow(n,e){
+  if (n<0){
+    return -Math.pow(-n,e);
+  }else{
+    return Math.pow(n,e);
+  }
 }
 
 function draw(){
-  //configure canvas
-  var canvas = document.getElementById('canvas');
-  var ctx = canvas.getContext('2d');
-  canvas.width=960;
-  canvas.height=640;
   ctx.fillStyle="white";
-  ctx.fillRect(0,0,960,640);
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  //simulate physics
+  if (dg("physics").checked){
+    for (var i=0;i<data.length-1;i++){
+      var datum1=data[i];
+      var d1pos={
+        x:datum1.x-datum1.totalWidth(ctx)-6,
+        y:datum1.y-24,
+        w:datum1.totalWidth(ctx)+6,
+        h:24
+      }
+      for (var j=i+1;j<data.length;j++){
+        var datum2=data[j];
+        var d2pos={
+          x:datum2.x-datum2.totalWidth(ctx)-6,
+          y:datum2.y-24,
+          w:datum2.totalWidth(ctx)+6,
+          h:24
+        }
+        if (intersect(d1pos,d2pos)){
+          var angle=Math.atan(((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2))/((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2)));
+          var distance=Math.sqrt(Math.pow((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2),2)+Math.pow((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2),2));
+          var force=Math.max(0.4,Math.min(1,1-(distance-100)/200));
+          if (distance<30){
+            force*=3;
+          }
+          if (distance<50){
+            force*=2;
+          }
+          if ((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2)<0){
+            if (isNaN(angle)){
+              datum1.vy-=physicsspeed*force;
+              datum2.vy+=physicsspeed*force;
+            }else{
+              datum1.vx-=physicsspeed*force*Math.cos(angle);
+              datum2.vx+=physicsspeed*force*Math.cos(angle);
+              datum1.vy-=physicsspeed*force*Math.sin(angle);
+              datum2.vy+=physicsspeed*force*Math.sin(angle);
+            }
+          }else{
+            if (isNaN(angle)){
+              datum1.vy+=physicsspeed*force;
+              datum2.vy-=physicsspeed*force;
+            }else{
+              datum1.vx+=physicsspeed*force*Math.cos(angle);
+              datum2.vx-=physicsspeed*force*Math.cos(angle);
+              datum1.vy+=physicsspeed*force*Math.sin(angle);
+              datum2.vy-=physicsspeed*force*Math.sin(angle);
+            }
+          }
+        }
+        if (datum1.evolvedfrom.includes(datum2.name)||datum1.evolvedfrom.includes(datum2.lname)){
+          datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed;
+          datum1.vy+=abspow(d2pos.y-d1pos.y,1.2)/50*physicsspeed;
+          datum2.vx-=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed*0.5;
+          datum2.vy-=abspow(d2pos.y-d1pos.y,1.2)/50*physicsspeed*0.5;
+        }
+        if (datum2.evolvedfrom.includes(datum1.name)||datum2.evolvedfrom.includes(datum1.lname)){
+          datum2.vx+=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/50*physicsspeed;
+          datum2.vy+=abspow(d1pos.y-d2pos.y,1.2)/50*physicsspeed;
+          datum1.vx-=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/50*physicsspeed*0.5;
+          datum1.vy-=abspow(d1pos.y-d2pos.y,1.2)/50*physicsspeed*0.5;
+        }
+        if (datum1.related.includes(datum2.name)||datum1.related.includes(datum2.lname)){
+          datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed;
+          datum1.vy+=abspow(d2pos.y-d1pos.y,1.2)/100*physicsspeed;
+          datum2.vx-=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed*0.5;
+          datum2.vy-=abspow(d2pos.y-d1pos.y,1.2)/100*physicsspeed*0.5;
+        }
+        if (datum2.related.includes(datum1.name)||datum2.related.includes(datum1.lname)){
+          datum2.vx+=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/100*physicsspeed;
+          datum2.vy+=abspow(d1pos.y-d2pos.y,1.2)/100*physicsspeed;
+          datum1.vx-=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/100*physicsspeed*0.5;
+          datum1.vy-=abspow(d1pos.y-d2pos.y,1.2)/100*physicsspeed*0.5;
+        }
+      }
+    }
+    for (var i=0;i<data.length;i++){
+      var datum=data[i];
+      var d1pos={
+        x:datum.x,
+        y:datum.y,
+        w:datum.totalWidth(ctx)+6,
+        h:24
+      }
+      var angle=Math.atan((d1pos.x+d1pos.w/2-480)/(d1pos.y+d1pos.h/2-320));
+      var distance=Math.sqrt(Math.pow(d1pos.x+d1pos.w/2-480,2)+Math.pow(d1pos.y+d1pos.h/2-320,2));
+      var force=(Math.max(0,Math.min(2,distance/300))-0.1)*0.5;
+      if (i==5){
+        console.log(force*Math.cos(angle)+","+force*Math.sin(angle))
+      }
+      if (d1pos.x+d1pos.w/2-480>0){
+        datum.vx-=force*Math.cos(angle)*physicsspeed;
+        datum.vy-=force*Math.sin(angle)*physicsspeed;
+      }else{
+        datum.vx+=force*Math.cos(angle)*physicsspeed;
+        datum.vy+=force*Math.sin(angle)*physicsspeed;
+      }
+      var x,y;
+      x=10+840*datum.order/(data[data.length-1].order);
+      if (datum.pyear()<1980){
+        y=Math.pow(datum.pyear()-1900,2)*0.01+20;
+      }else{
+        y=Math.pow(datum.pyear()-1980,2)*0.34+84;
+      }
+      datum.vx+=abspow(x-datum.x,1.2)/150*physicsspeed;
+      datum.vy+=abspow(y-datum.y,1.2)/150*physicsspeed;
+      datum.vx+=Math.random()*0.02*physicsspeed;
+      datum.vy+=Math.random()*0.02*physicsspeed;
+      datum.vx*=Math.pow(0.6,physicsspeed);
+      datum.vy*=Math.pow(0.6,physicsspeed);
+      datum.x+=datum.vx*physicsspeed;
+      datum.y+=datum.vy*physicsspeed;
+    }
+    console.log(data[5].vx+","+data[5].vy)
+  }
+  //find following entry
+  if (dg("follow").checked){
+    for (var i=0;i<data.length;i++){
+      //get data
+      var datum=data[i];
+      if (dg("followid").value==i||dg("followid").value==datum.name||dg("followid").value==datum.lname){
+        dg("+x").value=dg("+x").min=dg("+x").max=datum.x+datum.totalWidth(ctx)+3;
+        dg("+y").value=dg("+y").min=dg("+y").max=datum.y;
+        break;
+      }
+    }
+  }else{
+    dg("+x").min=0;
+    dg("+x").max=960;
+    dg("+y").min=0;
+    dg("+y").max=640;
+  }
   //draw boxes
   ctx.font="12px Courier";
   ctx.lineWidth="1";
@@ -123,11 +270,11 @@ function draw(){
   for (var i=0;i<data.length;i++){
     //get data
     var datum=data[i];
-    var pos=datum.drawPos();
+    var dpos=datum.drawPos();
     //draw
     ctx.beginPath();
     ctx.strokeStyle=datum.color;
-    ctx.rect(pos.x-2,pos.y-12,datum.totalWidth(ctx)+6,24);
+    ctx.rect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
     ctx.stroke();
   }
   //draw entry
@@ -135,19 +282,19 @@ function draw(){
   for (var i=0;i<data.length;i++){
     //get data
     var datum=data[i];
-    var pos=datum.drawPos();
+    var dpos=datum.drawPos();
     //draw name
     ctx.fillStyle="black";
     ctx.font="12px Courier";
-    ctx.fillText(datum.name,pos.x,pos.y);
+    ctx.fillText(datum.name,dpos.x,dpos.y);
     //draw image with 80% scale
     ctx.scale(0.8,0.8);
-    ctx.drawImage(datum.image,(pos.x+ctx.measureText(datum.name).width+5)*1.25,(pos.y-14)*1.25+4);
+    ctx.drawImage(datum.image,(dpos.x+ctx.measureText(datum.name).width+5)*1.25,(dpos.y-14)*1.25+4);
     ctx.scale(1.25,1.25);
     //draw author and year
     ctx.fillStyle="gray";
     ctx.font="9px Courier";
-    ctx.fillText(datum.getsub(),pos.x,pos.y+10);
+    ctx.fillText(datum.getsub(),dpos.x,dpos.y+10);
     //evolved from/related handle
     for (var j=0;j<data.length;j++){
       //get other
@@ -155,12 +302,13 @@ function draw(){
       if (!root){
         continue;
       }
+      var rpos=root.drawPos();
       //evolved from
       ctx.font="12px Courier";
       if (datum.evolvedfrom.includes(root.name)||datum.evolvedfrom.includes(root.lname)){
         ctx.beginPath();
         ctx.strokeStyle=datum.color;
-        canvas_arrow(ctx,root.drawPos().x+root.totalWidth(ctx)+4,root.drawPos().y,pos.x-2,pos.y);
+        canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
         ctx.stroke();
         ctx.strokeStyle="black";
       }
@@ -169,11 +317,82 @@ function draw(){
         ctx.setLineDash([5,5]);
         ctx.beginPath();
         ctx.strokeStyle=datum.color;
-        canvas_arrow(ctx,root.drawPos().x+root.totalWidth(ctx)+4,root.drawPos().y,pos.x-2,pos.y);
+        canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.strokeStyle="black";
       }
     }
   }
+  if (dg("center").checked){
+    //screen center
+    ctx.beginPath();
+    ctx.strokeStyle="red";
+    ctx.lineWidth=2;
+    ctx.moveTo(canvas.width/2-10,canvas.height/2);
+    ctx.lineTo(canvas.width/2+10,canvas.height/2);
+    ctx.moveTo(canvas.width/2,canvas.height/2-10);
+    ctx.lineTo(canvas.width/2,canvas.height/2+10);
+    ctx.lineTo(canvas.width/2+10,canvas.height/2);
+    ctx.lineTo(canvas.width/2,canvas.height/2-10);
+    ctx.lineTo(canvas.width/2-10,canvas.height/2);
+    ctx.lineTo(canvas.width/2,canvas.height/2+10);
+    ctx.stroke();
+    //field center
+    var x=canvas.width/2+(480-dg("+x").value)*dg("dx").value;
+    var y=canvas.height/2+(360-dg("+y").value)*dg("dy").value;
+    ctx.beginPath();
+    ctx.strokeStyle="blue";
+    ctx.moveTo(x-10,y);
+    ctx.lineTo(x+10,y);
+    ctx.moveTo(x,y-10);
+    ctx.lineTo(x,y+10);
+    ctx.lineTo(x+10,y);
+    ctx.lineTo(x,y-10);
+    ctx.lineTo(x-10,y);
+    ctx.lineTo(x,y+10);
+    ctx.stroke();
+    ctx.strokeStyle="black";
+    ctx.lineWidth=1;
+  }
+}
+function resize(){
+  canvas.style.width=canvas.width=dg("x").value;
+  canvas.style.height=canvas.height=dg("y").value;
+  draw();
+}
+function resetscrsize(){
+  dg("x").value=960;
+  dg("y").value=640;
+}
+function resetscrzoom(){
+  dg("dx").value=1;
+  dg("dy").value=1;
+}
+function resetscrpos(){
+  dg("+x").value=480;
+  dg("+y").value=320;
+}
+function resetphysics(){
+  for (var i=0;i<data.length;i++){
+    var datum=data[i];
+    var x,y;
+    x=10+840*datum.order/(data[data.length-1].order);
+    if (datum.pyear()<1980){
+      y=Math.pow(datum.pyear()-1900,2)*0.01+20;
+    }else{
+      y=Math.pow(datum.pyear()-1980,2)*0.34+84;
+    }
+    datum.x=x;
+    datum.y=y;
+    datum.vx=datum.vy=0;
+  }
+  dg("physics").checked=false;
+}
+function resetall(){
+  resetscrsize();
+  resetscrzoom();
+  resetscrpos();
+  resetphysics();
+  dg("center").checked=false;
 }
