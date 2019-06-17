@@ -10,12 +10,34 @@ var Entry=function(line){
       col.splice(i,1);
       i--;
     }
+    if (col[i][0]==" "){
+      col[i]=col[i].substring(1);
+    }
   }
   console.log(col);
   //sets each listed properties
-  var attributes="order,year,name,lname,author,lauthor,locale,expression,fgh,evolvedfrom,related,color,equal,definition,termination".split(",");
-  for (var i=0;i<attributes.length;i++){
-    this[attributes[i]]  = col[i]?col[i].split(": ")[1]:"";
+  var attributes={
+    order:"order",
+    discoveryear:"year",
+    name:"name",
+    localname:"lname",
+    author:"author",
+    localauthor:"lauthor",
+    locale:"locale",
+    expression:"expression",
+    fgh:"fgh",
+    evolvedfrom:"evolvedfrom",
+    related:"related",
+    color:"color",
+    equal:"equal",
+    definitionurl:"definition",
+    isterminated:"termination"
+  };
+  for (attribute in attributes){
+    this[attributes[attribute]]="";
+  }
+  for (var i=0;i<col.length;i++){
+    this[attributes[col[i].split(": ")[0]]]  = col[i]?col[i].split(": ")[1]:"";
   }
   this.evolvedfrom=this.evolvedfrom.split("/");
   this.related=this.related.split("/");
