@@ -1,8 +1,34 @@
 <html>
-  <head><title>sheet2js</title>
+<head>
+  <title>Googol Maps v2 / Naruyoko's version</title>
+  <style>
+    * {
+      font-family: "Courier"
+    }
+  </style>
 </head>
 <body>
-<textarea id="debug" cols=50 rows=10></textarea>
+<textarea id="debug" cols=50 rows=10 style="margin:4px;"></textarea>
+<div>
+  Selected Item:
+  <ul id="details" style="height:200px;overflow:scroll">
+    <li>Id: Not Selected</li>
+    <li>Name: Not Selected</li>
+    <li>Local Name: Not Selected</li>
+    <li>Author: Not Selected</li>
+    <li>Local Author: Not Selected</li>
+    <li>Date: Not Selected</li>
+    <li>Locale: Not Selected</li>
+    <li>Expression: Not Selected</li>
+    <li>FGH: Not Selected</li>
+    <li>Evolved from: Not Selected</li>
+    <li>Related to: Not Selected</li>
+    <li>Order: Not Selected</li>
+    <li>Color: Not Selected</li>
+    <li>Definition: Not Selected</li>
+    <li>Has termination proved: Not Selected</li>
+  </ul>
+</div>
 <p>
   <input type="range" min=100 max=4000 value=960 step=25 id="x" onchange="resize()">
   <input type="range" min=100 max=4000 value=640 step=25 id="y" onchange="resize()">
@@ -23,10 +49,12 @@
   <br>
   <input type="text" id="followid">
   <input type="checkbox" id="follow">
+  <button onclick="console.clear();entry();waitUntilEntry=setInterval(function(){if(data.length){clearInterval(waitUntilEntry);}else{return;}resetphysics();},100);">Update</button>
 </p>
 <canvas id="canvas" style="width:960px;height:640px;border:1px solid black"></canvas>
 <script type="text/javascript" src="https://code.jquery.com/jquery-1.12.0.min.js">
 //--</script>
+  <script type="text/javascript" src="https://raw.githack.com/koteitan/GoogolMaps2.0/master/event.js"></script>
 <script type="text/javascript" src="./main.js"></script>
 </body>
 </html>
