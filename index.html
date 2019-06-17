@@ -5,6 +5,16 @@
     * {
       font-family: "Courier"
     }
+    fake-link {
+      color: blue;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    button.unavailable {
+      opacity:0.6;
+      cursor: not-allowed;
+      color:#ff0000;
+    }
   </style>
 </head>
 <body>
@@ -12,6 +22,7 @@
 <div>
   Selected Item:
   <ul id="details" style="height:200px;overflow:scroll">
+    <button class="unavailable">Follow this</button>
     <li>Id: Not Selected</li>
     <li>Name: Not Selected</li>
     <li>Local Name: Not Selected</li>
@@ -23,6 +34,8 @@
     <li>FGH: Not Selected</li>
     <li>Evolved from: Not Selected</li>
     <li>Related to: Not Selected</li>
+    <li>Evolves to: Not Selected</li>
+    <li>Predecesses: Not Selected</li>
     <li>Order: Not Selected</li>
     <li>Color: Not Selected</li>
     <li>Definition: Not Selected</li>
