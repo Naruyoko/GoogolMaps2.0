@@ -33,14 +33,22 @@ var Entry=function(line){
     definitionurl:"definition",
     isterminated:"termination"
   };
-  for (attribute in attributes){
+  for (var attribute in attributes){
     this[attributes[attribute]]="";
   }
   for (var i=0;i<col.length;i++){
     this[attributes[col[i].split(": ")[0]]]  = col[i]?col[i].split(": ")[1]:"";
   }
-  this.evolvedfrom=this.evolvedfrom.split("/");
-  this.related=this.related.split("/");
+  if (this.evolvedfrom){
+    this.evolvedfrom=this.evolvedfrom.split("/");
+  }else{
+    this.evolvedfrom=[];
+  }
+  if (this.related){
+    this.related=this.related.split("/");
+  }else{
+    this.related=[];
+  }
   if (EMPTY.includes(this.expression)){
     this.image=new Image();
   }else{
@@ -54,13 +62,49 @@ Entry.prototype.toString = function(){
   return this.year + ":" + this.name + "(" + this.order + ") $$" + this.expression + "$$ w/" + this.color;
 }
 Entry.prototype.pyear = function (){
-  if (this.year>9999){
-    return (""+this.year).substring(0,4)*1;
+  return this.fyear().split("/")[0]*1;
+}
+Entry.prototype.fyear = function (){
+  var s="";
+  var y=this.year;
+  if (y[0]=="-"){
+    s="-";
+    y=y.substring(1);
   }
-  return this.year*1;
+  if (y.length>6){
+    return s+y.substring(0,4)+"/"+y.substring(4,6)+"/"+y.substring(6,8);
+  }else if (y.length>4){
+    return s+y.substring(0,4)+"/"+y.substring(4,6);
+  }else{
+    return s+y.substring(0,4);
+  }
+}
+Entry.prototype.ryear = function (){
+  var y=this.fyear().split("/");
+  y=[y[0]*1,y[1]*1,y[2]*1];
+  if (isNaN(y[1])){
+    y[1]=1;
+  }
+  if (isNaN(y[2])){
+    y[2]=1;
+  }
+  return y[0]+(y[1]-1)/12+(y[2]-1)/365;
 }
 Entry.prototype.getsub = function (){
-  return this.author+", "+this.year;
+  return this.author+", "+this.pyear();
+}
+Entry.prototype.defPos = function (){
+  var x,y;
+  x=10+840*this.order/(data[data.length-1].order);
+  var r=this.ryear();
+  if (r<1900){
+    y=32-Math.log(1900+Math.exp(4)-r)*3;
+  }else if (r<1980){
+    y=Math.pow(r-1900,2)*0.01+20;
+  }else{
+    y=Math.pow(r-1980,2)*0.34+84;
+  }
+  return {x:x,y:y};
 }
 Entry.prototype.drawPos = function (){
   return {
@@ -138,6 +182,7 @@ var canvas_arrow=function (context, fromx, fromy, tox, toy){
 var canvas;
 var ctx;
 var holdingitem=-1;
+var selecteditem=-1;
 var lastposition;
 var lastMousePos;
 var trueLastMousePos;
@@ -145,6 +190,149 @@ var wasMouseDown=false;
 var EMPTY=["-"," ",""];
 Array.prototype.clone=function (){
   return this.slice(0);
+}
+var isfollowing=function (id){
+  var datum=data[id];
+  var f=dg("followid").value.toLowerCase();
+  return f==id||f==datum.name.toLowerCase()||f==datum.lname.toLowerCase();
+}
+var IDFromName=function (s){
+  var s=s.toLowerCase();
+  for (var i=0;i<data.length;i++){
+    var datum=data[i];
+    if (s==datum.name.toLowerCase()||s==datum.lname.toLowerCase()){
+      return i;
+    }
+  }
+  return -1;
+}
+
+var showDetails=function (id){
+  var s="";
+  if (id==-1){
+    s="<button class=\"unavailable\">Follow this</button>"+
+      "<li>Id: Not Selected</li>"+
+      "<li>Name: Not Selected</li>"+
+      "<li>Local Name: Not Selected</li>"+
+      "<li>Author: Not Selected</li>"+
+      "<li>Local Author: Not Selected</li>"+
+      "<li>Date: Not Selected</li>"+
+      "<li>Locale: Not Selected</li>"+
+      "<li>Expression: Not Selected</li>"+
+      "<li>FGH: Not Selected</li>"+
+      "<li>Evolved from: Not Selected</li>"+
+      "<li>Related to: Not Selected</li>"+
+      "<li>Evolves to: Not Selected</li>"+
+      "<li>Predecesses: Not Selected</li>"+
+      "<li>Order: Not Selected</li>"+
+      "<li>Color: Not Selected</li>"+
+      "<li>Definition: Not Selected</li>"+
+      "<li>Has termination proved: Not Selected</li>";
+  }else{
+    var datum=data[id];
+    s+="<button onclick=\"dg(&quot;followid&quot;).value=&quot;"+datum.name+"&quot;;dg(&quot;follow&quot;).checked=true;\">Follow this</button>";
+    s+="<li>Id: "+id+"</li>";
+    s+="<li>Name: "+datum.name+"</li>";
+    s+="<li>Local Name: "+datum.lname+"</li>";
+    s+="<li>Author: "+datum.author+"</li>";
+    s+="<li>Local Author: "+datum.lauthor+"</li>";
+    s+="<li>Date: "+datum.fyear()+"</li>";
+    s+="<li>Locale: "+datum.locale+"</li>";
+    if (EMPTY.includes(datum.expression)){
+      s+="<li>Expression: -</li>";
+    }else{
+      s+="<li>Expression: "+latexToimg(datum.expression)+"</li>";
+    }
+    if (EMPTY.includes(datum.fgh)){
+      s+="<li>FGH: -</li>";
+    }else{
+      s+="<li>FGH: "+latexToimg(datum.fgh)+"</li>";
+    }
+    if (datum.evolvedfrom.length){
+      s+="<li>Evolved from: ";
+      for (var i=0;i<datum.evolvedfrom.length;i++){
+        var name=datum.evolvedfrom[i];
+        s+="<fake-link onclick=\"showDetails("+IDFromName(name)+")\">"+name+"</fake-link>";
+        if (i!=datum.evolvedfrom.length-1){
+          s+=", ";
+        }
+      }
+      s+="</li>";
+    }else{
+      s+="<li>Evolved from: -</li>";
+    }
+    if (datum.related.length){
+      s+="<li>Related to: ";
+      for (var i=0;i<datum.related.length;i++){
+        var name=datum.related[i];
+        s+="<fake-link onclick=\"showDetails("+IDFromName(name)+")\">"+name+"</fake-link>";
+        if (i!=datum.related.length-1){
+          s+=", ";
+        }
+      }
+      s+="</li>";
+    }else{
+      s+="<li>Related to: -</li>";
+    }
+    var evolvesto=[];
+    for (var i=0;i<data.length;i++){
+      var other=data[i];
+      var list=other.evolvedfrom;
+      if (list.includes(datum.name)||list.includes(datum.lname)){
+        evolvesto.push(i);
+      }
+    }
+    if (evolvesto.length){
+      s+="<li>Evolves to: ";
+      for (var i=0;i<evolvesto.length;i++){
+        var num=evolvesto[i];
+        s+="<fake-link onclick=\"showDetails("+num+")\">"+data[num].lname+"</fake-link>";
+        if (i!=evolvesto.length-1){
+          s+=", ";
+        }
+      }
+      s+="</li>";
+    }else{
+      s+="<li>Evolves to: -</li>";
+    }
+    var predecesses=[];
+    for (var i=0;i<data.length;i++){
+      var other=data[i];
+      var list=other.related;
+      if (list.includes(datum.name)||list.includes(datum.lname)){
+        predecesses.push(i);
+      }
+    }
+    if (predecesses.length){
+      s+="<li>Predecesses: ";
+      for (var i=0;i<predecesses.length;i++){
+        var num=predecesses[i];
+        s+="<fake-link onclick=\"showDetails("+num+")\">"+data[num].lname+"</fake-link>";
+        if (i!=predecesses.length-1){
+          s+=", ";
+        }
+      }
+      s+="</li>";
+    }else{
+      s+="<li>Predecesses: -</li>";
+    }
+    s+="<li>Order: "+datum.order+"</li>";
+    s+="<li>Color: <span style=\"color:"+datum.color+"\">"+datum.color+"</span></li>";
+    if (EMPTY.includes(datum.definition)){
+      s+="<li>Definition: -</li>";
+    }else{
+      s+="<li>Definition: <a href=\""+datum.definition+"\">"+datum.definition+"</a></li>";
+    }
+    if (datum.termination=="1"){
+      s+="<li>Has termination proved: Yes</li>";
+    }else if (datum.termination=="0"){
+      s+="<li>Has termination proved: No</li>";
+    }else{
+      s+="<li>Has termination proved: "+datum.termination+"</li>";
+    }
+  }
+  dg("details").innerHTML=s;
+  selecteditem=id;
 }
 
 window.onload=function (){
@@ -184,63 +372,15 @@ window.onload=function (){
           holdingitem=i;
           lastMousePos=mousePos.clone();
           trueLastMousePos=mousePos.clone();
-          var s="";
-          s+="<li>Id: "+i+"</li>";
-          s+="<li>Name: "+datum.name+"</li>";
-          s+="<li>Local Name: "+datum.lname+"</li>";
-          s+="<li>Author: "+datum.author+"</li>";
-          s+="<li>Local Author: "+datum.lauthor+"</li>";
-          s+="<li>Date: "+datum.year+"</li>";
-          s+="<li>Locale: "+datum.locale+"</li>";
-          if (EMPTY.includes(datum.expression)){
-            s+="<li>Expression: -</li>";
-          }else{
-            s+="<li>Expression: "+latexToimg(datum.expression)+"</li>";
-          }
-          if (EMPTY.includes(datum.fgh)){
-            s+="<li>FGH: -</li>";
-          }else{
-            s+="<li>FGH: "+latexToimg(datum.fgh)+"</li>";
-          }
-          s+="<li>Evolved from: "+datum.evolvedfrom+"</li>";
-          s+="<li>Related to: "+datum.related+"</li>";
-          s+="<li>Order: "+datum.order+"</li>";
-          s+="<li>Color: <span style=\"color:"+datum.color+"\">"+datum.color+"</span></li>";
-          if (EMPTY.includes(datum.definition)){
-            s+="<li>Definition: -</li>";
-          }else{
-            s+="<li>Definition: <a href=\""+datum.definition+"\">"+datum.definition+"</a></li>";
-          }
-          if (datum.termination=="1"){
-            s+="<li>Has termination proved: Yes</li>";
-          }else if (datum.termination=="0"){
-            s+="<li>Has termination proved: No</li>";
-          }else{
-            s+="<li>Has termination proved: "+datum.termination+"</li>";
-          }
-          dg("details").innerHTML=s;
+          showDetails(i);
           return;
         }
       }
       holdingitem=-1;
       lastMousePos=mousePos.clone();
       trueLastMousePos=mousePos.clone();
-      dg("details").innerHTML=""+
-        "<li>Id: Not Selected</li>"+
-        "<li>Name: Not Selected</li>"+
-        "<li>Local Name: Not Selected</li>"+
-        "<li>Author: Not Selected</li>"+
-        "<li>Local Author: Not Selected</li>"+
-        "<li>Date: Not Selected</li>"+
-        "<li>Locale: Not Selected</li>"+
-        "<li>Expression: Not Selected</li>"+
-        "<li>FGH: Not Selected</li>"+
-        "<li>Evolved from: Not Selected</li>"+
-        "<li>Related to: Not Selected</li>"+
-        "<li>Order: Not Selected</li>"+
-        "<li>Color: Not Selected</li>"+
-        "<li>Definition: Not Selected</li>"+
-        "<li>Has termination proved: Not Selected</li>";
+      showDetails(-1);
+      return;
     }
     handleMouseUp=function (){
       if (holdingitem!=-1){
@@ -260,7 +400,7 @@ window.onload=function (){
           trueLastMousePos=mousePos.clone();
         }else{
           var datum=data[holdingitem];
-          var isholdingfollowing=dg("follow").checked&&(dg("followid").value==holdingitem||dg("followid").value==datum.name||dg("followid").value==datum.lname);
+          var isholdingfollowing=isfollowing(holdingitem);
           var x,y;
           x=(mousePos[0]-lastMousePos[0])/dg("dx").value;
           y=(mousePos[1]-lastMousePos[1])/dg("dy").value;
@@ -400,15 +540,9 @@ function draw(){
         datum.vx+=force*Math.cos(angle)*physicsspeed;
         datum.vy+=force*Math.sin(angle)*physicsspeed;
       }
-      var x,y;
-      x=10+840*datum.order/(data[data.length-1].order);
-      if (datum.pyear()<1980){
-        y=Math.pow(datum.pyear()-1900,2)*0.01+20;
-      }else{
-        y=Math.pow(datum.pyear()-1980,2)*0.34+84;
-      }
-      datum.vx+=abspow(x-datum.x,1.2)/150*physicsspeed;
-      datum.vy+=abspow(y-datum.y,1.2)/150*physicsspeed;
+      var epos=datum.defPos();
+      datum.vx+=abspow(epos.x-datum.x,1.2)/150*physicsspeed;
+      datum.vy+=abspow(epos.y-datum.y,1.2)/150*physicsspeed;
       datum.vx+=Math.random()*0.02*physicsspeed;
       datum.vy+=Math.random()*0.02*physicsspeed;
       datum.vx*=Math.pow(0.6,physicsspeed);
@@ -427,8 +561,8 @@ function draw(){
     for (var i=0;i<data.length;i++){
       //get data
       var datum=data[i];
-      if (dg("followid").value==i||dg("followid").value==datum.name||dg("followid").value==datum.lname){
-        dg("+x").value=dg("+x").min=dg("+x").max=datum.x+datum.totalWidth(ctx)+3;
+      if (isfollowing(i)){
+        dg("+x").value=dg("+x").min=dg("+x").max=datum.x+(datum.totalWidth(ctx)+3)/2/dg("dx").value;
         dg("+y").value=dg("+y").min=dg("+y").max=datum.y;
         followingid=i;
         break;
@@ -444,10 +578,30 @@ function draw(){
   if (followingid==holdingitem&&holdingitem!=-1&&trueLastMousePos+""==mousePos+""){
     handleMouseDragging();
   }
-  //draw boxes
+  //highlight selected/following item
   ctx.font="12px Courier";
   ctx.lineWidth="1";
-  ctx.fillStyle="white"
+  if (selecteditem!=-1){
+    //get data
+    var datum=data[selecteditem];
+    var dpos=datum.drawPos();
+    //draw
+    ctx.fillStyle="#ffd2bf";
+    ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
+  }
+  if (followingid!=-1){
+    //get data
+    var datum=data[followingid];
+    var dpos=datum.drawPos();
+    //draw
+    if (selecteditem==followingid){
+      ctx.fillStyle="#ddb0ae";
+    }else{
+      ctx.fillStyle="#ddddee";
+    }
+    ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
+  }
+  //draw boxes
   for (var i=0;i<data.length;i++){
     //get data
     var datum=data[i];
@@ -557,15 +711,9 @@ function resetscrpos(){
 function resetphysics(){
   for (var i=0;i<data.length;i++){
     var datum=data[i];
-    var x,y;
-    x=10+840*datum.order/(data[data.length-1].order);
-    if (datum.pyear()<1980){
-      y=Math.pow(datum.pyear()-1900,2)*0.01+20;
-    }else{
-      y=Math.pow(datum.pyear()-1980,2)*0.34+84;
-    }
-    datum.x=x;
-    datum.y=y;
+    var epos=datum.defPos();
+    datum.x=epos.x;
+    datum.y=epos.y;
     datum.vx=datum.vy=0;
   }
   dg("physics").checked=false;
