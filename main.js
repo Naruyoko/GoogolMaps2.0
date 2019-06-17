@@ -13,15 +13,19 @@ var Entry=function(line){
   }
   console.log(col);
   //sets each listed properties
-  var attributes="order,year,name,lname,author,lauthor,locale,expression,fgh,evolvedfrom,related,color".split(",");
+  var attributes="order,year,name,lname,author,lauthor,locale,expression,fgh,evolvedfrom,related,color,equal,definition,termination".split(",");
   for (var i=0;i<attributes.length;i++){
     this[attributes[i]]  = col[i]?col[i].split(": ")[1]:"";
   }
   this.evolvedfrom=this.evolvedfrom.split("/");
   this.related=this.related.split("/");
-  var img=new Image();
-  img.src="https://latex.codecogs.com/gif.latex?"+encodeURIComponent(this.expression);
-  this.image=img;
+  if (EMPTY.includes(this.expression)){
+    this.image=new Image();
+  }else{
+    var img=new Image();
+    img.src=latexToURL(this.expression);
+    this.image=img;
+  }
   this.x=this.y=this.vx=this.vy=-1;
 }
 Entry.prototype.toString = function(){
@@ -56,8 +60,14 @@ var data=[];
 var expand=function(res){
   var sheet = res.feed.entry;
   var entries = sheet.length;
+  data = [];
+  var order=-1;
   for(var e=0;e<entries;e++){
     var entry = new Entry(sheet[e]);
+    if (entry.equal!=1){
+      order++;
+    }
+    entry.order=order;
     data.push(entry);
   }
 
@@ -74,6 +84,7 @@ var entry=function(){
     url = "https://spreadsheets.google.com/feeds/list/" +
           spreadsheetId +
           "/od6/public/basic?alt=json";
+  data=[];
   $.get({
     url: url,
     success: function(response) {
@@ -82,7 +93,17 @@ var entry=function(){
   });
 };
 
-function canvas_arrow(context, fromx, fromy, tox, toy){
+var latexToURL=function (expression){
+  return "https://latex.codecogs.com/gif.latex?"+encodeURIComponent(expression);
+}
+var URLToimg=function (url){
+  return "<img src=\""+url+"\">";
+}
+var latexToimg=function (expression){
+  return URLToimg(latexToURL(expression));
+}
+
+var canvas_arrow=function (context, fromx, fromy, tox, toy){
     var headlen = 10;   // length of head in pixels
     var angle = Math.atan2(toy-fromy,tox-fromx);
     context.moveTo(fromx, fromy);
@@ -92,7 +113,17 @@ function canvas_arrow(context, fromx, fromy, tox, toy){
     context.lineTo(tox-headlen*Math.cos(angle+Math.PI/6),toy-headlen*Math.sin(angle+Math.PI/6));
 }
 
-var canvas,ctx
+var canvas;
+var ctx;
+var holdingitem=-1;
+var lastposition;
+var lastMousePos;
+var trueLastMousePos;
+var wasMouseDown=false;
+var EMPTY=["-"," ",""];
+Array.prototype.clone=function (){
+  return this.slice(0);
+}
 
 window.onload=function (){
   console.clear();
@@ -104,18 +135,139 @@ window.onload=function (){
       return;
     }
     //configure canvas
-    canvas = dg('canvas');
+    can = canvas = dg('canvas');
     ctx = canvas.getContext('2d');
     canvas.width=960;
     canvas.height=640;
     canvas.style.margin="4px";
+    //set up canvas interaction functions
+    initEvent(canvas);
+    handleMouseDown=function (){
+      wasMouseDown=false;
+      for (var i=0;i<data.length;i++){
+        var datum=data[i];
+        var dpos={
+          x:datum.drawPos().x-1,
+          y:datum.drawPos().y-11,
+          w:datum.totalWidth(ctx)+6,
+          h:24
+        };
+        var cpos={
+          x:mousePos[0],
+          y:mousePos[1],
+          w:1,
+          h:1
+        }
+        if (intersect(dpos,cpos)){
+          holdingitem=i;
+          lastMousePos=mousePos.clone();
+          trueLastMousePos=mousePos.clone();
+          var s="";
+          s+="<li>Id: "+i+"</li>";
+          s+="<li>Name: "+datum.name+"</li>";
+          s+="<li>Local Name: "+datum.lname+"</li>";
+          s+="<li>Author: "+datum.author+"</li>";
+          s+="<li>Local Author: "+datum.lauthor+"</li>";
+          s+="<li>Date: "+datum.year+"</li>";
+          s+="<li>Locale: "+datum.locale+"</li>";
+          if (EMPTY.includes(datum.expression)){
+            s+="<li>Expression: -</li>";
+          }else{
+            s+="<li>Expression: "+latexToimg(datum.expression)+"</li>";
+          }
+          if (EMPTY.includes(datum.fgh)){
+            s+="<li>FGH: -</li>";
+          }else{
+            s+="<li>FGH: "+latexToimg(datum.fgh)+"</li>";
+          }
+          s+="<li>Evolved from: "+datum.evolvedfrom+"</li>";
+          s+="<li>Related to: "+datum.related+"</li>";
+          s+="<li>Order: "+datum.order+"</li>";
+          s+="<li>Color: <span style=\"color:"+datum.color+"\">"+datum.color+"</span></li>";
+          if (EMPTY.includes(datum.definition)){
+            s+="<li>Definition: -</li>";
+          }else{
+            s+="<li>Definition: <a href=\""+datum.definition+"\">"+datum.definition+"</a></li>";
+          }
+          if (datum.termination=="1"){
+            s+="<li>Has termination proved: Yes</li>";
+          }else if (datum.termination=="0"){
+            s+="<li>Has termination proved: No</li>";
+          }else{
+            s+="<li>Has termination proved: "+datum.termination+"</li>";
+          }
+          dg("details").innerHTML=s;
+          return;
+        }
+      }
+      holdingitem=-1;
+      lastMousePos=mousePos.clone();
+      trueLastMousePos=mousePos.clone();
+      dg("details").innerHTML=""+
+        "<li>Id: Not Selected</li>"+
+        "<li>Name: Not Selected</li>"+
+        "<li>Local Name: Not Selected</li>"+
+        "<li>Author: Not Selected</li>"+
+        "<li>Local Author: Not Selected</li>"+
+        "<li>Date: Not Selected</li>"+
+        "<li>Locale: Not Selected</li>"+
+        "<li>Expression: Not Selected</li>"+
+        "<li>FGH: Not Selected</li>"+
+        "<li>Evolved from: Not Selected</li>"+
+        "<li>Related to: Not Selected</li>"+
+        "<li>Order: Not Selected</li>"+
+        "<li>Color: Not Selected</li>"+
+        "<li>Definition: Not Selected</li>"+
+        "<li>Has termination proved: Not Selected</li>";
+    }
+    handleMouseUp=function (){
+      if (holdingitem!=-1){
+        var datum=data[holdingitem];
+        datum.vx=(mousePos[0]-lastMousePos[0])/dg("dx").value;
+        datum.vy=(mousePos[1]-lastMousePos[1])/dg("dy").value;
+      }
+      holdingitem=-1;
+      wasMouseDown=false;
+    }
+    handleMouseDragging=function (){
+      if (wasMouseDown){
+        if (holdingitem==-1){
+          dg("+x").value=parseInt(dg("+x").value)-(mousePos[0]-lastMousePos[0])/dg("dx").value;
+          dg("+y").value=parseInt(dg("+y").value)-(mousePos[1]-lastMousePos[1])/dg("dy").value;
+          lastMousePos=mousePos.clone();
+          trueLastMousePos=mousePos.clone();
+        }else{
+          var datum=data[holdingitem];
+          var isholdingfollowing=dg("follow").checked&&(dg("followid").value==holdingitem||dg("followid").value==datum.name||dg("followid").value==datum.lname);
+          var x,y;
+          x=(mousePos[0]-lastMousePos[0])/dg("dx").value;
+          y=(mousePos[1]-lastMousePos[1])/dg("dy").value;
+          if (isholdingfollowing){
+            x/=10;
+            y/=10;
+          }
+          datum.x+=x;
+          datum.y+=y;
+          if (!isholdingfollowing){
+            lastMousePos=mousePos.clone();
+          }
+          trueLastMousePos=mousePos.clone();
+        }
+      }
+      wasMouseDown=true;
+    }
+    handleMouseWheel=function (){
+      dg("dx").value*=Math.exp(mouseWheel[1]/1000);
+      dg("dy").value*=Math.exp(mouseWheel[1]/1000);
+    }
+    //initialize simulation
     resetphysics();
-    draw();
-    setInterval(function(){if(dg("physics").checked){draw();}},1000/60);
+    setInterval(draw,1000/60);
   },100);
 }
 function intersect(b1,b2){
-  return Math.abs((b1.x+b1.w/2)-(b2.x+b2.w/2))<(b1.w+b2.w)/2||Math.abs((b1.y+b1.h/2)-(b2.y+b2.h/2))<(b1.h+b2.h)/2;
+  return Math.abs((b1.x+b1.w/2)-(b2.x+b2.w/2))<(b1.w+b2.w)/2&&
+         Math.abs((b1.y+b1.h/2)-(b2.y+b2.h/2))<(b1.h+b2.h)/2;
 }
 
 var physicsspeed=1;
@@ -129,6 +281,7 @@ function abspow(n,e){
 }
 
 function draw(){
+  procEvent();
   ctx.fillStyle="white";
   ctx.fillRect(0,0,canvas.width,canvas.height);
   //simulate physics
@@ -218,9 +371,6 @@ function draw(){
       var angle=Math.atan((d1pos.x+d1pos.w/2-480)/(d1pos.y+d1pos.h/2-320));
       var distance=Math.sqrt(Math.pow(d1pos.x+d1pos.w/2-480,2)+Math.pow(d1pos.y+d1pos.h/2-320,2));
       var force=(Math.max(0,Math.min(2,distance/300))-0.1)*0.5;
-      if (i==5){
-        console.log(force*Math.cos(angle)+","+force*Math.sin(angle))
-      }
       if (d1pos.x+d1pos.w/2-480>0){
         datum.vx-=force*Math.cos(angle)*physicsspeed;
         datum.vy-=force*Math.sin(angle)*physicsspeed;
@@ -241,12 +391,16 @@ function draw(){
       datum.vy+=Math.random()*0.02*physicsspeed;
       datum.vx*=Math.pow(0.6,physicsspeed);
       datum.vy*=Math.pow(0.6,physicsspeed);
+      if (holdingitem==i){
+        datum.vx=0;
+        datum.vy=0;
+      }
       datum.x+=datum.vx*physicsspeed;
       datum.y+=datum.vy*physicsspeed;
     }
-    console.log(data[5].vx+","+data[5].vy)
   }
   //find following entry
+  var followingid=-1;
   if (dg("follow").checked){
     for (var i=0;i<data.length;i++){
       //get data
@@ -254,6 +408,7 @@ function draw(){
       if (dg("followid").value==i||dg("followid").value==datum.name||dg("followid").value==datum.lname){
         dg("+x").value=dg("+x").min=dg("+x").max=datum.x+datum.totalWidth(ctx)+3;
         dg("+y").value=dg("+y").min=dg("+y").max=datum.y;
+        followingid=i;
         break;
       }
     }
@@ -262,6 +417,10 @@ function draw(){
     dg("+x").max=960;
     dg("+y").min=0;
     dg("+y").max=640;
+  }
+  //check if followed, holding, but not dragging
+  if (followingid==holdingitem&&holdingitem!=-1&&trueLastMousePos+""==mousePos+""){
+    handleMouseDragging();
   }
   //draw boxes
   ctx.font="12px Courier";
