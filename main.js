@@ -160,7 +160,7 @@ var entry=function(){
 };
 
 var latexToURL=function (expression){
-  return "https://latex.codecogs.com/gif.latex?"+encodeURIComponent(expression);
+  return "https://latex.codecogs.com/png.latex?"+encodeURIComponent(expression);
 }
 var URLToimg=function (url){
   return "<img src=\""+url+"\">";
