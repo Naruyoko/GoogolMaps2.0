@@ -136,6 +136,35 @@ var expand=function(res){
     entry.order=order;
     data.push(entry);
   }
+  for (var i=0;i<data.length;i++){
+    var datum=data[i];
+    datum.evolvedfromID=[];
+    for (var j=0;j<datum.evolvedfrom.length;j++){
+      datum.evolvedfromID[j]=IDFromName(datum.evolvedfrom[j]);
+    }
+    datum.relatedID=[];
+    for (var j=0;j<datum.related.length;j++){
+      datum.relatedID[j]=IDFromName(datum.related[j]);
+    }
+  }
+  for (var i=0;i<data.length;i++){
+    var datum1=data[i];
+    datum1.evolvesto=[];
+    datum1.evolvestoID=[];
+    datum1.predecesses=[];
+    datum1.predecessesID=[];
+    for (var j=0;j<data.length;j++){
+      var datum2=data[j];
+      if (datum2.evolvedfromID.includes(i)){
+        datum1.evolvesto.push(datum2.name);
+        datum1.evolvestoID.push(j);
+      }
+      if (datum2.relatedID.includes(i)){
+        datum1.predecesses.push(datum2.name);
+        datum1.predecessesID.push(j);
+      }
+    }
+  }
 
   var str="";
   for(var e=0;e<entries;e++){
@@ -251,8 +280,7 @@ var showDetails=function (id){
     if (datum.evolvedfrom.length){
       s+="<li>Evolved from: ";
       for (var i=0;i<datum.evolvedfrom.length;i++){
-        var name=datum.evolvedfrom[i];
-        s+="<fake-link onclick=\"showDetails("+IDFromName(name)+")\">"+name+"</fake-link>";
+        s+="<fake-link onclick=\"showDetails("+datum.evolvedfromID[i]+")\">"+datum.evolvedfrom[i]+"</fake-link>";
         if (i!=datum.evolvedfrom.length-1){
           s+=", ";
         }
@@ -264,8 +292,7 @@ var showDetails=function (id){
     if (datum.related.length){
       s+="<li>Related to: ";
       for (var i=0;i<datum.related.length;i++){
-        var name=datum.related[i];
-        s+="<fake-link onclick=\"showDetails("+IDFromName(name)+")\">"+name+"</fake-link>";
+        s+="<fake-link onclick=\"showDetails("+datum.relatedID[i]+")\">"+datum.related[i]+"</fake-link>";
         if (i!=datum.related.length-1){
           s+=", ";
         }
@@ -274,47 +301,29 @@ var showDetails=function (id){
     }else{
       s+="<li>Related to: -</li>";
     }
-    var evolvesto=[];
-    for (var i=0;i<data.length;i++){
-      var other=data[i];
-      var list=other.evolvedfrom;
-      if (list.includes(datum.name)||list.includes(datum.lname)){
-        evolvesto.push(i);
-      }
-    }
-    if (evolvesto.length){
+    if (datum.evolvesto.length){
       s+="<li>Evolves to: ";
-      for (var i=0;i<evolvesto.length;i++){
-        var num=evolvesto[i];
-        s+="<fake-link onclick=\"showDetails("+num+")\">"+data[num].lname+"</fake-link>";
-        if (i!=evolvesto.length-1){
+      for (var i=0;i<datum.evolvesto.length;i++){
+        s+="<fake-link onclick=\"showDetails("+datum.evolvestoID[i]+")\">"+datum.evolvesto[i]+"</fake-link>";
+        if (i!=datum.evolvesto.length-1){
           s+=", ";
         }
       }
       s+="</li>";
     }else{
-      s+="<li>Evolves to: -</li>";
+      s+="<li>Evolved from: -</li>";
     }
-    var predecesses=[];
-    for (var i=0;i<data.length;i++){
-      var other=data[i];
-      var list=other.related;
-      if (list.includes(datum.name)||list.includes(datum.lname)){
-        predecesses.push(i);
-      }
-    }
-    if (predecesses.length){
+    if (datum.predecesses.length){
       s+="<li>Predecesses: ";
-      for (var i=0;i<predecesses.length;i++){
-        var num=predecesses[i];
-        s+="<fake-link onclick=\"showDetails("+num+")\">"+data[num].lname+"</fake-link>";
-        if (i!=predecesses.length-1){
+      for (var i=0;i<datum.predecesses.length;i++){
+        s+="<fake-link onclick=\"showDetails("+datum.predecessesID[i]+")\">"+datum.predecesses[i]+"</fake-link>";
+        if (i!=datum.predecesses.length-1){
           s+=", ";
         }
       }
       s+="</li>";
     }else{
-      s+="<li>Predecesses: -</li>";
+      s+="<li>Predecesses to: -</li>";
     }
     s+="<li>Order: "+datum.order+"</li>";
     s+="<li>Color: <span style=\"color:"+datum.color+"\">"+datum.color+"</span></li>";
@@ -334,6 +343,7 @@ var showDetails=function (id){
   dg("details").innerHTML=s;
   selecteditem=id;
 }
+var lastTime=new Date().getTime();
 
 window.onload=function (){
   console.clear();
@@ -442,13 +452,92 @@ function abspow(n,e){
   }
 }
 
+function doCollisionPhysics(datum1,d1pos,datum2,d2pos){
+  if (intersect(d1pos,d2pos)){
+    var angle=Math.atan(((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2))/((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2)));
+    var distance=Math.sqrt(Math.pow((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2),2)+Math.pow((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2),2));
+    var force=Math.max(0.4,Math.min(1,1-(distance-100)/200));
+    if (distance<30){
+      force*=3;
+    }
+    if (distance<50){
+      force*=2;
+    }
+    if ((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2)<0){
+      if (isNaN(angle)){
+        datum1.vy-=physicsspeed*force;
+        datum2.vy+=physicsspeed*force;
+      }else{
+        datum1.vx-=physicsspeed*force*Math.cos(angle);
+        datum2.vx+=physicsspeed*force*Math.cos(angle);
+        datum1.vy-=physicsspeed*force*Math.sin(angle);
+        datum2.vy+=physicsspeed*force*Math.sin(angle);
+      }
+    }else{
+      if (isNaN(angle)){
+        datum1.vy+=physicsspeed*force;
+        datum2.vy-=physicsspeed*force;
+      }else{
+        datum1.vx+=physicsspeed*force*Math.cos(angle);
+        datum2.vx-=physicsspeed*force*Math.cos(angle);
+        datum1.vy+=physicsspeed*force*Math.sin(angle);
+        datum2.vy-=physicsspeed*force*Math.sin(angle);
+      }
+    }
+  }
+}
+
 function draw(){
   procEvent();
   ctx.fillStyle="white";
   ctx.fillRect(0,0,canvas.width,canvas.height);
   //simulate physics
   if (dg("physics").checked){
+    //divide screen vertically
+    var dividedObjects=[];
+    for (var i=0;i<27;i++){
+      dividedObjects.push([]);
+    }
     for (var i=0;i<data.length-1;i++){
+      var datum=data[i];
+      dividedObjects[Math.max(0,Math.min(26,Math.floor((datum.y-24)/24)))].push(datum);
+    }
+    //collision
+    for (var i=0;i<dividedObjects.length;i++){
+      for (var j=0;j<dividedObjects[i].length;j++){
+        var datum1=dividedObjects[i][j];
+        var d1pos={
+          x:datum1.x-datum1.totalWidth(ctx)-6,
+          y:datum1.y-24,
+          w:datum1.totalWidth(ctx)+6,
+          h:24
+        }
+        for (var k=0;k<dividedObjects[i].length;k++){
+          var datum2=dividedObjects[i][k];
+          var d2pos={
+            x:datum2.x-datum2.totalWidth(ctx)-6,
+            y:datum2.y-24,
+            w:datum2.totalWidth(ctx)+6,
+            h:24
+          }
+          doCollisionPhysics(datum1,d1pos,datum2,d2pos);
+        }
+        if (i!=dividedObjects.length-1){
+          for (var k=0;k<dividedObjects[i+1].length;k++){
+            var datum2=dividedObjects[i+1][k];
+            var d2pos={
+              x:datum2.x-datum2.totalWidth(ctx)-6,
+              y:datum2.y-24,
+              w:datum2.totalWidth(ctx)+6,
+              h:24
+            }
+            doCollisionPhysics(datum1,d1pos,datum2,d2pos);
+          }
+        }
+      }
+    }
+    //evolved from and related to string physics
+    for (var i=0;i<data.length;i++){
       var datum1=data[i];
       var d1pos={
         x:datum1.x-datum1.totalWidth(ctx)-6,
@@ -456,72 +545,34 @@ function draw(){
         w:datum1.totalWidth(ctx)+6,
         h:24
       }
-      for (var j=i+1;j<data.length;j++){
-        var datum2=data[j];
+      for (var j=0;j<datum1.evolvedfromID.length;j++){
+        var datum2=data[datum1.evolvedfromID[j]];
         var d2pos={
           x:datum2.x-datum2.totalWidth(ctx)-6,
           y:datum2.y-24,
           w:datum2.totalWidth(ctx)+6,
           h:24
         }
-        if (intersect(d1pos,d2pos)){
-          var angle=Math.atan(((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2))/((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2)));
-          var distance=Math.sqrt(Math.pow((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2),2)+Math.pow((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2),2));
-          var force=Math.max(0.4,Math.min(1,1-(distance-100)/200));
-          if (distance<30){
-            force*=3;
-          }
-          if (distance<50){
-            force*=2;
-          }
-          if ((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2)<0){
-            if (isNaN(angle)){
-              datum1.vy-=physicsspeed*force;
-              datum2.vy+=physicsspeed*force;
-            }else{
-              datum1.vx-=physicsspeed*force*Math.cos(angle);
-              datum2.vx+=physicsspeed*force*Math.cos(angle);
-              datum1.vy-=physicsspeed*force*Math.sin(angle);
-              datum2.vy+=physicsspeed*force*Math.sin(angle);
-            }
-          }else{
-            if (isNaN(angle)){
-              datum1.vy+=physicsspeed*force;
-              datum2.vy-=physicsspeed*force;
-            }else{
-              datum1.vx+=physicsspeed*force*Math.cos(angle);
-              datum2.vx-=physicsspeed*force*Math.cos(angle);
-              datum1.vy+=physicsspeed*force*Math.sin(angle);
-              datum2.vy-=physicsspeed*force*Math.sin(angle);
-            }
-          }
+        datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed;
+        datum1.vy+=abspow(d2pos.y-d1pos.y,1.2)/50*physicsspeed;
+        datum2.vx-=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed*0.5;
+        datum2.vy-=abspow(d2pos.y-d1pos.y,1.2)/50*physicsspeed*0.5;
+      }
+      for (var j=0;j<datum1.relatedID.length;j++){
+        var datum2=data[datum1.relatedID[j]];
+        var d2pos={
+          x:datum2.x-datum2.totalWidth(ctx)-6,
+          y:datum2.y-24,
+          w:datum2.totalWidth(ctx)+6,
+          h:24
         }
-        if (datum1.evolvedfrom.includes(datum2.name)||datum1.evolvedfrom.includes(datum2.lname)){
-          datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed;
-          datum1.vy+=abspow(d2pos.y-d1pos.y,1.2)/50*physicsspeed;
-          datum2.vx-=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed*0.5;
-          datum2.vy-=abspow(d2pos.y-d1pos.y,1.2)/50*physicsspeed*0.5;
-        }
-        if (datum2.evolvedfrom.includes(datum1.name)||datum2.evolvedfrom.includes(datum1.lname)){
-          datum2.vx+=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/50*physicsspeed;
-          datum2.vy+=abspow(d1pos.y-d2pos.y,1.2)/50*physicsspeed;
-          datum1.vx-=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/50*physicsspeed*0.5;
-          datum1.vy-=abspow(d1pos.y-d2pos.y,1.2)/50*physicsspeed*0.5;
-        }
-        if (datum1.related.includes(datum2.name)||datum1.related.includes(datum2.lname)){
-          datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed;
-          datum1.vy+=abspow(d2pos.y-d1pos.y,1.2)/100*physicsspeed;
-          datum2.vx-=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed*0.5;
-          datum2.vy-=abspow(d2pos.y-d1pos.y,1.2)/100*physicsspeed*0.5;
-        }
-        if (datum2.related.includes(datum1.name)||datum2.related.includes(datum1.lname)){
-          datum2.vx+=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/100*physicsspeed;
-          datum2.vy+=abspow(d1pos.y-d2pos.y,1.2)/100*physicsspeed;
-          datum1.vx-=abspow(d1pos.x+d1pos.w+20-d2pos.x,1.2)/100*physicsspeed*0.5;
-          datum1.vy-=abspow(d1pos.y-d2pos.y,1.2)/100*physicsspeed*0.5;
-        }
+        datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed;
+        datum1.vy+=abspow(d2pos.y-d1pos.y,1.2)/100*physicsspeed;
+        datum2.vx-=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed*0.5;
+        datum2.vy-=abspow(d2pos.y-d1pos.y,1.2)/100*physicsspeed*0.5;
       }
     }
+    //environment physics
     for (var i=0;i<data.length;i++){
       var datum=data[i];
       var d1pos={
@@ -630,33 +681,36 @@ function draw(){
     ctx.fillStyle="gray";
     ctx.font="9px Courier";
     ctx.fillText(datum.getsub(),dpos.x,dpos.y+10);
-    //evolved from/related handle
-    for (var j=0;j<data.length;j++){
+    ctx.font="12px Courier";
+    //evolved from
+    for (var j=0;j<datum.evolvedfrom.length;j++){
       //get other
-      var root=data[j-2];
+      var root=data[datum.evolvedfromID[j]];
       if (!root){
         continue;
       }
       var rpos=root.drawPos();
-      //evolved from
-      ctx.font="12px Courier";
-      if (datum.evolvedfrom.includes(root.name)||datum.evolvedfrom.includes(root.lname)){
-        ctx.beginPath();
-        ctx.strokeStyle=datum.color;
-        canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
-        ctx.stroke();
-        ctx.strokeStyle="black";
+      ctx.beginPath();
+      ctx.strokeStyle=datum.color;
+      canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
+      ctx.stroke();
+      ctx.strokeStyle="black";
+    }
+    //related
+    for (var j=0;j<datum.related.length;j++){
+      //get other
+      var root=data[datum.relatedID[j]];
+      if (!root){
+        continue;
       }
-      //related
-      if (datum.related.includes(root.name)||datum.related.includes(root.lname)){
-        ctx.setLineDash([5,5]);
-        ctx.beginPath();
-        ctx.strokeStyle=datum.color;
-        canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.strokeStyle="black";
-      }
+      var rpos=root.drawPos();
+      ctx.setLineDash([5,5]);
+      ctx.beginPath();
+      ctx.strokeStyle=datum.color;
+      canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle="black";
     }
   }
   if (dg("center").checked){
@@ -690,12 +744,19 @@ function draw(){
     ctx.strokeStyle="black";
     ctx.lineWidth=1;
   }
+  //frame time
+  var now=new Date().getTime();
+  var dif=now-lastTime;
+  dg("time").textContent=dif;
+  dg("frame").textContent=(1000/dif).toFixed(1);
+  lastTime=now;
 }
 function resize(){
   canvas.style.width=canvas.width=dg("x").value;
   canvas.style.height=canvas.height=dg("y").value;
   draw();
 }
+
 function resetscrsize(){
   dg("x").value=960;
   dg("y").value=640;
