@@ -1,6 +1,7 @@
 function dg(s){
   return document.getElementById(s);
 }
+var displayFont="Courier";
 
 var Entry=function(line){
   var col = line.content.$t.split(",");
@@ -114,9 +115,9 @@ Entry.prototype.drawPos = function (){
 }
 Entry.prototype.totalWidth = function (context){
   var o=context.font;
-  context.font="12px Courier";
+  context.font="12px "+displayFont;
   var c=context.measureText(this.name).width+this.image.naturalWidth*0.8+4;
-  context.font="9px Courier";
+  context.font="9px "+displayFont;
   c=Math.max(c,context.measureText(this.getsub()).width);
   context.font=o;
   return c;
@@ -630,7 +631,7 @@ function draw(){
     handleMouseDragging();
   }
   //highlight selected/following item
-  ctx.font="12px Courier";
+  ctx.font="12px "+displayFont;
   ctx.lineWidth="1";
   if (selecteditem!=-1){
     //get data
@@ -671,7 +672,7 @@ function draw(){
     var dpos=datum.drawPos();
     //draw name
     ctx.fillStyle="black";
-    ctx.font="12px Courier";
+    ctx.font="12px "+displayFont;
     ctx.fillText(datum.name,dpos.x,dpos.y);
     //draw image with 80% scale
     ctx.scale(0.8,0.8);
@@ -679,9 +680,9 @@ function draw(){
     ctx.scale(1.25,1.25);
     //draw author and year
     ctx.fillStyle="gray";
-    ctx.font="9px Courier";
+    ctx.font="9px "+displayFont;
     ctx.fillText(datum.getsub(),dpos.x,dpos.y+10);
-    ctx.font="12px Courier";
+    ctx.font="12px "+displayFont;
     //evolved from
     for (var j=0;j<datum.evolvedfrom.length;j++){
       //get other
