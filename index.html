@@ -21,7 +21,8 @@
 <textarea id="debug" cols=50 rows=10 style="margin:4px;"></textarea>
 <div>
   <span id="time">x</span>ms<br>
-  <span id="frame">x</span>fps
+  <span id="frame">x</span>fps<br>
+  We are using <a href="https://github.com/uetchy/math-api">Math API</a> to render <img src="https://math.now.sh?from=\LaTeX" style="height:14px">.
 </div>
 <div>
   Selected Item:
@@ -59,11 +60,26 @@
   <input type="range" min=-320 max=960 value=320 step=1 id="+y" onchange="resize()">
   <button onclick="resetscrpos();resize();">Reset Screen Position</button>
   <br>
+  <input type="checkbox" id="drawimage" checked>
+  <select id="hidecategory" onchange="research()">
+    <option value="none">Show all</option>
+    <option value="evolutiononeway">Evolution forward</option>
+    <option value="relationoneway">Relation forward</option>
+    <option value="bothoneway">Both forward</option>
+    <option value="evolution">Evolution</option>
+    <option value="relation">Relation</option>
+    <option value="both">Both</option>
+  </select>
+  <input type="number" min=0 max=10 value=0 id="hidesearchdepth" onchange="research()">
+  <input type="checkbox" id="completelyhideifhidden">
+  <input type="checkbox" id="noupdatehidden">
+  <br>
   <input type="checkbox" id="center" onclick="resize()">
   <input type="checkbox" id="physics">
   <button onclick="resetphysics();resize();">Reset Physics</button>
   <button onclick="resetall();resize();">Reset All</button>
   <br>
+  <input type="range" min=0 max=1 value=1 step=0.01 id="physicsspeed"><br>
   <input type="text" id="followid">
   <input type="checkbox" id="follow">
   <button onclick="console.clear();entry();waitUntilEntry=setInterval(function(){if(data.length){clearInterval(waitUntilEntry);}else{return;}resetphysics();},100);">Update</button>

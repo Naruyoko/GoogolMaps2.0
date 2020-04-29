@@ -4,6 +4,7 @@ function dg(s){
 var displayFont="Courier";
 
 var Entry=function(line){
+  console.log(line);
   var col = line.content.$t.split(",");
   for (var i=0;i<col.length;i++){
     if (col[i].indexOf(": ")==-1){
@@ -58,6 +59,7 @@ var Entry=function(line){
     this.image=img;
   }
   this.x=this.y=this.vx=this.vy=-1;
+  this.id=-1;
 }
 Entry.prototype.toString = function(){
   return this.year + ":" + this.name + "(" + this.order + ") $$" + this.expression + "$$ w/" + this.color;
@@ -116,7 +118,7 @@ Entry.prototype.drawPos = function (){
 Entry.prototype.totalWidth = function (context){
   var o=context.font;
   context.font="12px "+displayFont;
-  var c=context.measureText(this.name).width+this.image.naturalWidth*0.8+4;
+  var c=context.measureText(this.name).width+(drawimage&&this.image.src?this.image.naturalWidth*0.8+4:0);
   context.font="9px "+displayFont;
   c=Math.max(c,context.measureText(this.getsub()).width);
   context.font=o;
@@ -135,6 +137,7 @@ var expand=function(res){
       order++;
     }
     entry.order=order;
+    entry.id=data.length;
     data.push(entry);
   }
   for (var i=0;i<data.length;i++){
@@ -185,12 +188,13 @@ var entry=function(){
     url: url,
     success: function(response) {
       expand(response);
+      research();
     }
   });
 };
 
 var latexToURL=function (expression){
-  return "https://latex.codecogs.com/png.latex?"+encodeURIComponent(expression);
+  return "https://math.now.sh?from="+encodeURIComponent(expression);
 }
 var URLToimg=function (url){
   return "<img src=\""+url+"\">";
@@ -343,6 +347,7 @@ var showDetails=function (id){
   }
   dg("details").innerHTML=s;
   selecteditem=id;
+  if (!noupdatehidden) research();
 }
 var lastTime=new Date().getTime();
 
@@ -365,32 +370,21 @@ window.onload=function (){
     initEvent(canvas);
     handleMouseDown=function (){
       wasMouseDown=false;
-      for (var i=0;i<data.length;i++){
-        var datum=data[i];
-        var dpos={
-          x:datum.drawPos().x-1,
-          y:datum.drawPos().y-11,
-          w:datum.totalWidth(ctx)+6,
-          h:24
-        };
-        var cpos={
-          x:mousePos[0],
-          y:mousePos[1],
-          w:1,
-          h:1
-        }
-        if (intersect(dpos,cpos)){
-          holdingitem=i;
-          lastMousePos=mousePos.clone();
-          trueLastMousePos=mousePos.clone();
-          showDetails(i);
+      for (var i=0;i<connecteddata.length;i++){
+        if (checkSelection(connecteddata[i])){
+          selectItem(connecteddata[i].id);
           return;
         }
       }
-      holdingitem=-1;
-      lastMousePos=mousePos.clone();
-      trueLastMousePos=mousePos.clone();
-      showDetails(-1);
+      if (!completelyhideifhidden){
+        for (var i=0;i<unconnecteddata.length;i++){
+          if (checkSelection(unconnecteddata[i])){
+            selectItem(unconnecteddata[i].id);
+            return;
+          }
+        }
+      }
+      selectItem(-1);
       return;
     }
     handleMouseUp=function (){
@@ -453,6 +447,29 @@ function abspow(n,e){
   }
 }
 
+function checkSelection(datum){
+  var dpos={
+    x:datum.drawPos().x-1,
+    y:datum.drawPos().y-11,
+    w:datum.totalWidth(ctx)+6,
+    h:24
+  };
+  var cpos={
+    x:mousePos[0],
+    y:mousePos[1],
+    w:1,
+    h:1
+  }
+  return intersect(dpos,cpos);
+}
+
+function selectItem(i){
+  holdingitem=i;
+  lastMousePos=mousePos.clone();
+  trueLastMousePos=mousePos.clone();
+  showDetails(i);
+}
+
 function doCollisionPhysics(datum1,d1pos,datum2,d2pos){
   if (intersect(d1pos,d2pos)){
     var angle=Math.atan(((d1pos.x+d1pos.w/2)-(d2pos.x+d2pos.w/2))/((d1pos.y+d1pos.h/2)-(d2pos.y+d2pos.h/2)));
@@ -488,10 +505,23 @@ function doCollisionPhysics(datum1,d1pos,datum2,d2pos){
   }
 }
 
+var drawimage=true;
+var completelyhideifhidden=false;
+var noupdatehidden=false;
+var hidecategory="none";
+var hidesearchdepth=0;
+var connecteddata=[];
+var unconnecteddata=[];
+
 function draw(){
   procEvent();
   ctx.fillStyle="white";
   ctx.fillRect(0,0,canvas.width,canvas.height);
+  //get configuration
+  drawimage=dg("drawimage").checked;
+  noupdatehidden=dg("noupdatehidden").checked;
+  completelyhideifhidden=dg("completelyhideifhidden").checked;
+  physicsspeed=+dg("physicsspeed").value;
   //simulate physics
   if (dg("physics").checked){
     //divide screen vertically
@@ -653,67 +683,12 @@ function draw(){
     }
     ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
   }
-  //draw boxes
-  for (var i=0;i<data.length;i++){
-    //get data
-    var datum=data[i];
-    var dpos=datum.drawPos();
-    //draw
-    ctx.beginPath();
-    ctx.strokeStyle=datum.color;
-    ctx.rect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
-    ctx.stroke();
-  }
-  //draw entry
-  ctx.strokeStyle="black";
-  for (var i=0;i<data.length;i++){
-    //get data
-    var datum=data[i];
-    var dpos=datum.drawPos();
-    //draw name
-    ctx.fillStyle="black";
-    ctx.font="12px "+displayFont;
-    ctx.fillText(datum.name,dpos.x,dpos.y);
-    //draw image with 80% scale
-    ctx.scale(0.8,0.8);
-    ctx.drawImage(datum.image,(dpos.x+ctx.measureText(datum.name).width+5)*1.25,(dpos.y-14)*1.25+4);
-    ctx.scale(1.25,1.25);
-    //draw author and year
-    ctx.fillStyle="gray";
-    ctx.font="9px "+displayFont;
-    ctx.fillText(datum.getsub(),dpos.x,dpos.y+10);
-    ctx.font="12px "+displayFont;
-    //evolved from
-    for (var j=0;j<datum.evolvedfrom.length;j++){
-      //get other
-      var root=data[datum.evolvedfromID[j]];
-      if (!root){
-        continue;
-      }
-      var rpos=root.drawPos();
-      ctx.beginPath();
-      ctx.strokeStyle=datum.color;
-      canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
-      ctx.stroke();
-      ctx.strokeStyle="black";
-    }
-    //related
-    for (var j=0;j<datum.related.length;j++){
-      //get other
-      var root=data[datum.relatedID[j]];
-      if (!root){
-        continue;
-      }
-      var rpos=root.drawPos();
-      ctx.setLineDash([5,5]);
-      ctx.beginPath();
-      ctx.strokeStyle=datum.color;
-      canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.strokeStyle="black";
-    }
-  }
+  //draw data
+  for (var i=0;i<connecteddata.length;i++) drawDatumBox(connecteddata[i]);
+  for (var i=0;i<unconnecteddata.length;i++) drawDatumBox(unconnecteddata[i]);
+  for (var i=0;i<connecteddata.length;i++) drawDatumBody(connecteddata[i]);
+  for (var i=0;i<unconnecteddata.length;i++) drawDatumBody(unconnecteddata[i]);
+  ctx.globalAlpha=1;
   if (dg("center").checked){
     //screen center
     ctx.beginPath();
@@ -752,10 +727,126 @@ function draw(){
   dg("frame").textContent=(1000/dif).toFixed(1);
   lastTime=now;
 }
+function drawDatumBox(datum){
+  if (completelyhideifhidden&&!connecteddata.includes(datum)) return;
+  if (!connecteddata.includes(datum)) ctx.globalAlpha=0.2;
+  else ctx.globalAlpha=1;
+  var dpos=datum.drawPos();
+  //draw boxes
+  ctx.beginPath();
+  ctx.strokeStyle=datum.color;
+  ctx.rect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
+  ctx.stroke();
+}
+function drawDatumBody(datum){
+  if (completelyhideifhidden&&!connecteddata.includes(datum)) return;
+  if (!connecteddata.includes(datum)) ctx.globalAlpha=0.2;
+  else ctx.globalAlpha=1;
+  var dpos=datum.drawPos();
+  //draw entry
+  ctx.strokeStyle="black";
+  //draw name
+  ctx.fillStyle="black";
+  ctx.font="12px "+displayFont;
+  ctx.fillText(datum.name,dpos.x,dpos.y);
+  if (drawimage&&datum.image.src){
+    //draw image with 80% scale
+    ctx.scale(0.8,0.8);
+    ctx.drawImage(datum.image,(dpos.x+ctx.measureText(datum.name).width+5)*1.25,(dpos.y-14)*1.25+4);
+    ctx.scale(1.25,1.25);
+  }
+  //draw author and year
+  ctx.fillStyle="gray";
+  ctx.font="9px "+displayFont;
+  ctx.fillText(datum.getsub(),dpos.x,dpos.y+10);
+  ctx.font="12px "+displayFont;
+  //evolved from
+  for (var j=0;j<datum.evolvedfrom.length;j++){
+    //get other
+    var root=data[datum.evolvedfromID[j]];
+    if (!root){
+      continue;
+    }
+    if (completelyhideifhidden&&!connecteddata.includes(root)) continue;
+    if (!connecteddata.includes(root)) ctx.globalAlpha=0.2;
+    var rpos=root.drawPos();
+    ctx.beginPath();
+    ctx.strokeStyle=datum.color;
+    canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
+    ctx.stroke();
+    ctx.strokeStyle="black";
+  }
+  //related
+  for (var j=0;j<datum.related.length;j++){
+    //get other
+    var root=data[datum.relatedID[j]];
+    if (!root){
+      continue;
+    }
+    if (completelyhideifhidden&&!connecteddata.includes(root)) continue;
+    if (!connecteddata.includes(root)) ctx.globalAlpha=0.2;
+    var rpos=root.drawPos();
+    ctx.setLineDash([5,5]);
+    ctx.beginPath();
+    ctx.strokeStyle=datum.color;
+    canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle="black";
+  }
+}
 function resize(){
   canvas.style.width=canvas.width=dg("x").value;
   canvas.style.height=canvas.height=dg("y").value;
   draw();
+}
+function research(){
+  hidecategory=dg("hidecategory").value;
+  hidesearchdepth=+dg("hidesearchdepth").value;
+  if (hidesearchdepth===0) hidesearchdepth=Infinity;
+  connecteddata=[];
+  if (hidecategory=="none"||selecteditem==-1){
+    connecteddata=data;
+    unconnecteddata=[];
+  }else{
+    function additems(a){
+      for (var i=0;i<a.length;i++){
+        if (!connecteddata.includes(data[a[i]])){
+          connecteddata.push(data[a[i]]);
+          nextchildrentobetested.push(data[a[i]]);
+        }
+      }
+    }
+    //evolution forward, evolution backward, relation forward, relation backward
+    var stuff={
+      evolutiononeway:[1,0,0,0],
+      relationoneway:[0,0,1,0],
+      bothoneway:[1,0,1,0],
+      evolution:[1,1,0,0],
+      relation:[0,0,1,1],
+      both:[1,1,1,1]
+    };
+    connecteddata.push(data[selecteditem]);
+    var childrentobetested=[data[selecteditem]];
+    var categories=stuff[hidecategory];
+    for (var i=0;i<hidesearchdepth;i++){
+      var nextchildrentobetested=[];
+      for (var j=0;j<childrentobetested.length;j++){
+        var datum=childrentobetested[j];
+        if (!datum) continue;
+        if (categories[0]) additems(datum.evolvestoID);
+        if (categories[1]) additems(datum.evolvedfromID);
+        if (categories[2]) additems(datum.predecessesID);
+        if (categories[3]) additems(datum.relatedID);
+      }
+      if (!nextchildrentobetested.length) break;
+      childrentobetested=nextchildrentobetested;
+    }
+    unconnecteddata=[];
+    for (var i=0;i<data.length;i++){
+      if (!connecteddata.includes(data[i])) unconnecteddata.push(data[i]);
+    }
+  }
 }
 
 function resetscrsize(){
@@ -779,11 +870,14 @@ function resetphysics(){
     datum.vx=datum.vy=0;
   }
   dg("physics").checked=false;
+  dg("physicsspeed").value=1;
 }
 function resetall(){
   resetscrsize();
   resetscrzoom();
   resetscrpos();
   resetphysics();
+  research();
+  dg("drawimage").checked=true;
   dg("center").checked=false;
 }
