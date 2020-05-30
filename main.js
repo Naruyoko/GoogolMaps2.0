@@ -4,7 +4,7 @@ function dg(s){
 var displayFont="Courier";
 
 var Entry=function(line){
-  console.log(line);
+  //console.log(line);
   var col = line.content.$t.split(",");
   for (var i=0;i<col.length;i++){
     if (col[i].indexOf(": ")==-1){
@@ -16,7 +16,7 @@ var Entry=function(line){
       col[i]=col[i].substring(1);
     }
   }
-  console.log(col);
+  //console.log(col);
   //sets each listed properties
   var attributes={
     order:"order",
@@ -33,7 +33,8 @@ var Entry=function(line){
     color:"color",
     equal:"equal",
     definitionurl:"definition",
-    isterminated:"termination"
+    isterminated:"termination",
+    abbreviation:"abbreviation"
   };
   for (var attribute in attributes){
     this[attributes[attribute]]="";
@@ -58,11 +59,15 @@ var Entry=function(line){
     img.src=latexToURL(this.expression);
     this.image=img;
   }
+  if (!this.abbreviation) this.abbreviation="";
   this.x=this.y=this.vx=this.vy=-1;
   this.id=-1;
 }
 Entry.prototype.toString = function(){
   return this.year + ":" + this.name + "(" + this.order + ") $$" + this.expression + "$$ w/" + this.color;
+}
+Entry.prototype.dname = function (){
+  return showabbreviation&&this.abbreviation?this.abbreviation:this.name;
 }
 Entry.prototype.pyear = function (){
   return this.fyear().split("/")[0]*1;
@@ -107,22 +112,43 @@ Entry.prototype.defPos = function (){
   }else{
     y=Math.pow(r-1980,2)*0.34+84;
   }
-  return {x:x,y:y};
+  return {x:x*physicsfield[0]/960,y:y*physicsfield[1]/640};
 }
 Entry.prototype.drawPos = function (){
   return {
-    x:canvas.width/2+(this.x-dg("+x").value)*dg("dx").value,
-    y:canvas.height/2+(this.y-dg("+y").value)*dg("dy").value
+    x:Math.round(canvas.width/2+(this.x-dg("+x").value)*dg("dx").value),
+    y:Math.round(canvas.height/2+(this.y-dg("+y").value)*dg("dy").value)
   };
 }
-Entry.prototype.totalWidth = function (context){
-  var o=context.font;
-  context.font="12px "+displayFont;
-  var c=context.measureText(this.name).width+(drawimage&&this.image.src?this.image.naturalWidth*0.8+4:0);
-  context.font="9px "+displayFont;
-  c=Math.max(c,context.measureText(this.getsub()).width);
-  context.font=o;
-  return c;
+Entry.prototype.nameWidth = function (){
+  return Math.round(showabbreviation&&this.abbreviation?this.abbreviationBufferWidth:this.nameBufferWidth);
+}
+Entry.prototype.totalWidth = function (){
+  return Math.ceil(Math.max(this.nameWidth()+(drawimage&&this.image.src?this.imageBufferWidth+4:0),this.subBufferWidth));
+}
+Entry.prototype.drawTextBuffer = function (){
+  tbctx.clearRect(0,45*this.id+2,tbcanvas.width,45);
+  tbctx.fillStyle="black";
+  tbctx.font="12px "+displayFont;
+  this.nameBufferY=45*this.id+0;
+  this.nameBufferWidth=tbctx.measureText(this.name).width;
+  tbctx.fillText(this.name,0,this.nameBufferY+15);
+  this.abbreviationBufferWidth=tbctx.measureText(this.abbreviation).width;
+  this.abbreviationBufferY=45*this.id+15;
+  tbctx.fillText(this.abbreviation,0,this.abbreviationBufferY+15);
+  tbctx.fillStyle="gray";
+  tbctx.font="9px "+displayFont;
+  this.subBufferY=45*this.id+30;
+  this.subBufferWidth=tbctx.measureText(this.getsub()).width;
+  tbctx.fillText(this.getsub(),0,this.subBufferY+15);
+}
+Entry.prototype.drawImageBuffer = function (){
+  ibctx.clearRect(0,45*this.id,ibcanvas.width,45);
+  if (this.image.src){
+    this.imageBufferY=45*this.id;
+    this.imageBufferWidth=0.8*this.image.width;
+    ibctx.drawImage(this.image,0,45*this.id,0.8*this.image.width,0.8*this.image.height);
+  }
 }
 
 var data=[];
@@ -213,13 +239,32 @@ var canvas_arrow=function (context, fromx, fromy, tox, toy){
     context.lineTo(tox-headlen*Math.cos(angle+Math.PI/6),toy-headlen*Math.sin(angle+Math.PI/6));
 }
 
+var drawTextBuffers=function (){
+  tbcanvas.height=45*data.length+5;
+  for(var i=0;i<data.length;i++) data[i].drawTextBuffer();
+}
+var drawImageBuffers=function (){
+  ibcanvas.height=45*data.length;
+  for(var i=0;i<data.length;i++){
+    data[i].imageBufferWidth=0;
+    if (data[i].image.src){
+      if (data[i].image.complete) data[i].drawImageBuffer();
+      else data[i].image.onload=(function (i){return function (){data[i].drawImageBuffer();};})(i);
+    }
+  }
+}
+
 var canvas;
 var ctx;
+var tbcanvas;
+var tbctx;
 var holdingitem=-1;
 var selecteditem=-1;
 var lastposition;
 var lastMousePos;
 var trueLastMousePos;
+var lastLastMousePos=[];
+var lastLastMousePosLim=3;
 var wasMouseDown=false;
 var EMPTY=["-"," ",""];
 Array.prototype.clone=function (){
@@ -228,13 +273,13 @@ Array.prototype.clone=function (){
 var isfollowing=function (id){
   var datum=data[id];
   var f=dg("followid").value.toLowerCase();
-  return f==id||f==datum.name.toLowerCase()||f==datum.lname.toLowerCase();
+  return f&&dg("follow").checked&&(f==id||f==datum.name.toLowerCase()||f==datum.lname.toLowerCase()||f==datum.abbreviation.toLowerCase());
 }
 var IDFromName=function (s){
   var s=s.toLowerCase();
   for (var i=0;i<data.length;i++){
     var datum=data[i];
-    if (s==datum.name.toLowerCase()||s==datum.lname.toLowerCase()){
+    if (s==datum.name.toLowerCase()||s==datum.lname.toLowerCase()||s==datum.abbreviation.toLowerCase()){
       return i;
     }
   }
@@ -352,7 +397,7 @@ var showDetails=function (id){
 var lastTime=new Date().getTime();
 
 window.onload=function (){
-  console.clear();
+  if (console.clear) console.clear();
   entry();
   waitUntilEntry=setInterval(function(){
     if (data.length){
@@ -366,6 +411,20 @@ window.onload=function (){
     canvas.width=960;
     canvas.height=640;
     canvas.style.margin="4px";
+    canvas.textBuffer = tbcanvas = document.createElement('canvas');
+    tbctx = tbcanvas.getContext('2d');
+    tbcanvas.width=960;
+    tbcanvas.height=900;
+    tbcanvas.style.border="1px solid black";
+    //document.body.appendChild(tbcanvas);
+    drawTextBuffers();
+    canvas.imageBuffer = ibcanvas = document.createElement('canvas');
+    ibctx = ibcanvas.getContext('2d');
+    ibcanvas.width=960;
+    ibcanvas.height=900;
+    ibcanvas.style.border="1px solid black";
+    //document.body.appendChild(ibcanvas);
+    drawImageBuffers();
     //set up canvas interaction functions
     initEvent(canvas);
     handleMouseDown=function (){
@@ -390,8 +449,8 @@ window.onload=function (){
     handleMouseUp=function (){
       if (holdingitem!=-1){
         var datum=data[holdingitem];
-        datum.vx=(mousePos[0]-lastMousePos[0])/dg("dx").value;
-        datum.vy=(mousePos[1]-lastMousePos[1])/dg("dy").value;
+        datum.vx=physicsspeed&&(lastLastMousePos[0][0]-lastLastMousePos[lastLastMousePos.length-1][0])/lastLastMousePos.length/dg("dx").value/physicsspeed;
+        datum.vy=physicsspeed&&(lastLastMousePos[0][1]-lastLastMousePos[lastLastMousePos.length-1][1])/lastLastMousePos.length/dg("dy").value/physicsspeed;
       }
       holdingitem=-1;
       wasMouseDown=false;
@@ -429,7 +488,7 @@ window.onload=function (){
     }
     //initialize simulation
     resetphysics();
-    setInterval(draw,1000/60);
+    requestAnimationFrame(draw);
   },100);
 }
 function intersect(b1,b2){
@@ -451,7 +510,7 @@ function checkSelection(datum){
   var dpos={
     x:datum.drawPos().x-1,
     y:datum.drawPos().y-11,
-    w:datum.totalWidth(ctx)+6,
+    w:datum.totalWidth()+6,
     h:24
   };
   var cpos={
@@ -505,6 +564,7 @@ function doCollisionPhysics(datum1,d1pos,datum2,d2pos){
   }
 }
 
+var showabbreviation=false;
 var drawimage=true;
 var completelyhideifhidden=false;
 var noupdatehidden=false;
@@ -512,12 +572,17 @@ var hidecategory="none";
 var hidesearchdepth=0;
 var connecteddata=[];
 var unconnecteddata=[];
+var pastframes=[];
+var physicsfield=[960,640];
 
 function draw(){
   procEvent();
+  if (lastMousePos) lastLastMousePos.unshift(lastMousePos.clone());
+  if (lastLastMousePos.length>lastLastMousePosLim) lastLastMousePos.pop();
   ctx.fillStyle="white";
   ctx.fillRect(0,0,canvas.width,canvas.height);
   //get configuration
+  showabbreviation=dg("showabbreviation").checked;
   drawimage=dg("drawimage").checked;
   noupdatehidden=dg("noupdatehidden").checked;
   completelyhideifhidden=dg("completelyhideifhidden").checked;
@@ -526,29 +591,29 @@ function draw(){
   if (dg("physics").checked){
     //divide screen vertically
     var dividedObjects=[];
-    for (var i=0;i<27;i++){
+    for (var i=0;i<physicsfield[1]/24;i++){
       dividedObjects.push([]);
     }
     for (var i=0;i<data.length-1;i++){
       var datum=data[i];
-      dividedObjects[Math.max(0,Math.min(26,Math.floor((datum.y-24)/24)))].push(datum);
+      dividedObjects[Math.max(0,Math.min(dividedObjects.length-1,Math.floor((datum.y-24)/24)))].push(datum);
     }
     //collision
     for (var i=0;i<dividedObjects.length;i++){
       for (var j=0;j<dividedObjects[i].length;j++){
         var datum1=dividedObjects[i][j];
         var d1pos={
-          x:datum1.x-datum1.totalWidth(ctx)-6,
+          x:datum1.x-datum1.totalWidth()-6,
           y:datum1.y-24,
-          w:datum1.totalWidth(ctx)+6,
+          w:datum1.totalWidth()+6,
           h:24
         }
         for (var k=0;k<dividedObjects[i].length;k++){
           var datum2=dividedObjects[i][k];
           var d2pos={
-            x:datum2.x-datum2.totalWidth(ctx)-6,
+            x:datum2.x-datum2.totalWidth()-6,
             y:datum2.y-24,
-            w:datum2.totalWidth(ctx)+6,
+            w:datum2.totalWidth()+6,
             h:24
           }
           doCollisionPhysics(datum1,d1pos,datum2,d2pos);
@@ -557,9 +622,9 @@ function draw(){
           for (var k=0;k<dividedObjects[i+1].length;k++){
             var datum2=dividedObjects[i+1][k];
             var d2pos={
-              x:datum2.x-datum2.totalWidth(ctx)-6,
+              x:datum2.x-datum2.totalWidth()-6,
               y:datum2.y-24,
-              w:datum2.totalWidth(ctx)+6,
+              w:datum2.totalWidth()+6,
               h:24
             }
             doCollisionPhysics(datum1,d1pos,datum2,d2pos);
@@ -571,17 +636,17 @@ function draw(){
     for (var i=0;i<data.length;i++){
       var datum1=data[i];
       var d1pos={
-        x:datum1.x-datum1.totalWidth(ctx)-6,
+        x:datum1.x-datum1.totalWidth()-6,
         y:datum1.y-24,
-        w:datum1.totalWidth(ctx)+6,
+        w:datum1.totalWidth()+6,
         h:24
       }
       for (var j=0;j<datum1.evolvedfromID.length;j++){
         var datum2=data[datum1.evolvedfromID[j]];
         var d2pos={
-          x:datum2.x-datum2.totalWidth(ctx)-6,
+          x:datum2.x-datum2.totalWidth()-6,
           y:datum2.y-24,
-          w:datum2.totalWidth(ctx)+6,
+          w:datum2.totalWidth()+6,
           h:24
         }
         datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/50*physicsspeed;
@@ -592,9 +657,9 @@ function draw(){
       for (var j=0;j<datum1.relatedID.length;j++){
         var datum2=data[datum1.relatedID[j]];
         var d2pos={
-          x:datum2.x-datum2.totalWidth(ctx)-6,
+          x:datum2.x-datum2.totalWidth()-6,
           y:datum2.y-24,
-          w:datum2.totalWidth(ctx)+6,
+          w:datum2.totalWidth()+6,
           h:24
         }
         datum1.vx+=abspow(d2pos.x+d2pos.w+20-d1pos.x,1.2)/100*physicsspeed;
@@ -609,13 +674,13 @@ function draw(){
       var d1pos={
         x:datum.x,
         y:datum.y,
-        w:datum.totalWidth(ctx)+6,
+        w:datum.totalWidth()+6,
         h:24
       }
-      var angle=Math.atan((d1pos.x+d1pos.w/2-480)/(d1pos.y+d1pos.h/2-320));
-      var distance=Math.sqrt(Math.pow(d1pos.x+d1pos.w/2-480,2)+Math.pow(d1pos.y+d1pos.h/2-320,2));
+      var angle=Math.atan((d1pos.x+d1pos.w/2-physicsfield[0]/2)/(d1pos.y+d1pos.h/2-physicsfield[1]/2));
+      var distance=Math.sqrt(Math.pow(d1pos.x+d1pos.w/2-physicsfield[0]/2,2)+Math.pow(d1pos.y+d1pos.h/2-physicsfield[1]/2,2));
       var force=(Math.max(0,Math.min(2,distance/300))-0.1)*0.5;
-      if (d1pos.x+d1pos.w/2-480>0){
+      if (d1pos.x+d1pos.w/2-physicsfield[0]/2>0){
         datum.vx-=force*Math.cos(angle)*physicsspeed;
         datum.vy-=force*Math.sin(angle)*physicsspeed;
       }else{
@@ -644,7 +709,7 @@ function draw(){
       //get data
       var datum=data[i];
       if (isfollowing(i)){
-        dg("+x").value=dg("+x").min=dg("+x").max=datum.x+(datum.totalWidth(ctx)+3)/2/dg("dx").value;
+        dg("+x").value=dg("+x").min=dg("+x").max=datum.x+(datum.totalWidth()+3)/2/dg("dx").value;
         dg("+y").value=dg("+y").min=dg("+y").max=datum.y;
         followingid=i;
         break;
@@ -652,9 +717,9 @@ function draw(){
     }
   }else{
     dg("+x").min=0;
-    dg("+x").max=960;
+    dg("+x").max=physicsfield[0];
     dg("+y").min=0;
-    dg("+y").max=640;
+    dg("+y").max=physicsfield[1];
   }
   //check if followed, holding, but not dragging
   if (followingid==holdingitem&&holdingitem!=-1&&trueLastMousePos+""==mousePos+""){
@@ -669,7 +734,7 @@ function draw(){
     var dpos=datum.drawPos();
     //draw
     ctx.fillStyle="#ffd2bf";
-    ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
+    ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth()+6,24);
   }
   if (followingid!=-1){
     //get data
@@ -681,7 +746,7 @@ function draw(){
     }else{
       ctx.fillStyle="#ddddee";
     }
-    ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
+    ctx.fillRect(dpos.x-2,dpos.y-12,datum.totalWidth()+6,24);
   }
   //draw data
   for (var i=0;i<connecteddata.length;i++) drawDatumBox(connecteddata[i]);
@@ -704,8 +769,8 @@ function draw(){
     ctx.lineTo(canvas.width/2,canvas.height/2+10);
     ctx.stroke();
     //field center
-    var x=canvas.width/2+(480-dg("+x").value)*dg("dx").value;
-    var y=canvas.height/2+(360-dg("+y").value)*dg("dy").value;
+    var x=canvas.width/2+(physicsfield[0]/2-dg("+x").value)*dg("dx").value;
+    var y=canvas.height/2+(physicsfield[1]/2-dg("+y").value)*dg("dy").value;
     ctx.beginPath();
     ctx.strokeStyle="blue";
     ctx.moveTo(x-10,y);
@@ -723,9 +788,12 @@ function draw(){
   //frame time
   var now=new Date().getTime();
   var dif=now-lastTime;
+  pastframes.push(now);
+  while (pastframes.length>=4&&now-pastframes[0]>=1000) pastframes.shift();
   dg("time").textContent=dif;
-  dg("frame").textContent=(1000/dif).toFixed(1);
+  dg("frame").textContent=(1000*(pastframes.length-1)/(now-pastframes[0])).toFixed(1);
   lastTime=now;
+  requestAnimationFrame(draw);
 }
 function drawDatumBox(datum){
   if (completelyhideifhidden&&!connecteddata.includes(datum)) return;
@@ -735,7 +803,7 @@ function drawDatumBox(datum){
   //draw boxes
   ctx.beginPath();
   ctx.strokeStyle=datum.color;
-  ctx.rect(dpos.x-2,dpos.y-12,datum.totalWidth(ctx)+6,24);
+  ctx.rect(dpos.x-2,dpos.y-12,datum.totalWidth()+6,24);
   ctx.stroke();
 }
 function drawDatumBody(datum){
@@ -746,20 +814,14 @@ function drawDatumBody(datum){
   //draw entry
   ctx.strokeStyle="black";
   //draw name
-  ctx.fillStyle="black";
-  ctx.font="12px "+displayFont;
-  ctx.fillText(datum.name,dpos.x,dpos.y);
-  if (drawimage&&datum.image.src){
+  if (showabbreviation&&datum.abbreviation) ctx.drawImage(tbcanvas,0,datum.abbreviationBufferY+3,datum.abbreviationBufferWidth,15,dpos.x,dpos.y-12,datum.abbreviationBufferWidth,15);
+  else ctx.drawImage(tbcanvas,0,datum.nameBufferY+3,datum.nameBufferWidth,15,dpos.x,dpos.y-12,datum.nameBufferWidth,15);
+  if (drawimage&&datum.imageBufferWidth){
     //draw image with 80% scale
-    ctx.scale(0.8,0.8);
-    ctx.drawImage(datum.image,(dpos.x+ctx.measureText(datum.name).width+5)*1.25,(dpos.y-14)*1.25+4);
-    ctx.scale(1.25,1.25);
+    ctx.drawImage(ibcanvas,0,datum.imageBufferY,datum.imageBufferWidth,45,dpos.x+datum.nameWidth()+5,dpos.y-10,datum.imageBufferWidth,45);
   }
   //draw author and year
-  ctx.fillStyle="gray";
-  ctx.font="9px "+displayFont;
-  ctx.fillText(datum.getsub(),dpos.x,dpos.y+10);
-  ctx.font="12px "+displayFont;
+  ctx.drawImage(tbcanvas,0,datum.subBufferY+3,datum.subBufferWidth,15,dpos.x,dpos.y-2,datum.subBufferWidth,15);
   //evolved from
   for (var j=0;j<datum.evolvedfrom.length;j++){
     //get other
@@ -772,7 +834,7 @@ function drawDatumBody(datum){
     var rpos=root.drawPos();
     ctx.beginPath();
     ctx.strokeStyle=datum.color;
-    canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
+    canvas_arrow(ctx,rpos.x+root.totalWidth()+4,rpos.y,dpos.x-2,dpos.y);
     ctx.stroke();
     ctx.strokeStyle="black";
   }
@@ -789,16 +851,16 @@ function drawDatumBody(datum){
     ctx.setLineDash([5,5]);
     ctx.beginPath();
     ctx.strokeStyle=datum.color;
-    canvas_arrow(ctx,rpos.x+root.totalWidth(ctx)+4,rpos.y,dpos.x-2,dpos.y);
+    canvas_arrow(ctx,rpos.x+root.totalWidth()+4,rpos.y,dpos.x-2,dpos.y);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.strokeStyle="black";
   }
 }
 function resize(){
+  physicsfield=[dg("fx").value,dg("fy").value];
   canvas.style.width=canvas.width=dg("x").value;
   canvas.style.height=canvas.height=dg("y").value;
-  draw();
 }
 function research(){
   hidecategory=dg("hidecategory").value;
@@ -850,16 +912,20 @@ function research(){
 }
 
 function resetscrsize(){
-  dg("x").value=960;
-  dg("y").value=640;
+  dg("x").value=physicsfield[0];
+  dg("y").value=physicsfield[1];
 }
 function resetscrzoom(){
   dg("dx").value=1;
   dg("dy").value=1;
 }
 function resetscrpos(){
-  dg("+x").value=480;
-  dg("+y").value=320;
+  dg("+x").value=physicsfield[0]/2;
+  dg("+y").value=physicsfield[1]/2;
+}
+function resetfieldsize(){
+  dg("fx").value=960;
+  dg("fy").value=640;
 }
 function resetphysics(){
   for (var i=0;i<data.length;i++){
@@ -873,11 +939,13 @@ function resetphysics(){
   dg("physicsspeed").value=1;
 }
 function resetall(){
+  resetfieldsize();
   resetscrsize();
   resetscrzoom();
   resetscrpos();
   resetphysics();
   research();
+  dg("showabbreviation").checked=false;
   dg("drawimage").checked=true;
   dg("center").checked=false;
 }
